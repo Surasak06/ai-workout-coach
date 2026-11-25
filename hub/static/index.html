@@ -1,0 +1,2223 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F6F7F9">
+<title>AI Workout Coach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F6F7F9; --card:#FFFFFF; --line:#E6E8EC; --soft:#EEF0F3; --text:#14161A; --muted:#5F6672; --sub:#3D434C;
+  --accent:#5B3DF5; --accent-soft:#EFEBFF; --accent-mid:#9B86FF; --accent-pale:#D9D0FF;
+  --good:#1F7A45; --good-dot:#1F9D55; --warn:#8A5300; --warn-bg:#FFF4E0; --bad:#D93838; --amber:#E09A2B;
+  --cam:#1B1F26; --skel:#B9A8FF; --r:18px;
+  --head:"Kanit","IBM Plex Sans Thai",system-ui,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:"IBM Plex Sans Thai","Leelawadee UI",system-ui,sans-serif;font-size:15px}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer}
+h1,h2,h3{margin:0;font-family:var(--head);font-weight:500}
+.num{font-family:var(--head)}
+.muted{color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 20px;border-radius:14px;border:1px solid var(--line);background:var(--card);font-size:15px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-family:var(--head);font-size:16px}
+.btn.block{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--card)}
+.dot{width:8px;height:8px;border-radius:50%;background:#B4B9C2;display:inline-block}
+.dot.on{background:var(--good-dot)}
+.icon{width:22px;height:22px;flex:none}
+.tip{font-size:13px;color:var(--warn);background:var(--warn-bg);padding:9px 12px;border-radius:10px;line-height:1.6}
+.err{font-size:13px;color:var(--bad);background:#FDECEC;padding:9px 12px;border-radius:10px;display:none}
+.soon{font-size:11px;padding:3px 8px;border-radius:999px;background:var(--soft);color:var(--muted)}
+.ai{font-size:11px;padding:3px 8px;border-radius:999px;border:1px solid var(--accent);color:var(--accent)}
+
+/* ---------- layout ---------- */
+.app{min-height:100vh}
+.side{display:none}
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;justify-content:space-around;background:var(--card);border-top:1px solid var(--line);padding:6px 6px calc(10px + env(safe-area-inset-bottom))}
+.bottom a{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;color:var(--muted);min-width:56px;padding:6px 0}
+.bottom a.on{color:var(--accent)}
+.bottom a.on svg{stroke:var(--accent)}
+main{padding:22px 18px 100px;max-width:1160px;margin:0 auto}
+.page{display:none;flex-direction:column;gap:18px}
+.page.on{display:flex}
+body.full .bottom{display:none}
+body.full main{padding:0;max-width:none}
+@media (min-width:960px){
+  .app{display:grid;grid-template-columns:248px minmax(0,1fr)}
+  .side{display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh;background:var(--card);border-right:1px solid var(--line);padding:26px 16px}
+  .bottom{display:none}
+  main{padding:32px clamp(20px,3vw,40px) 40px;width:100%}
+  body.full main{padding:20px clamp(16px,2.5vw,32px) 28px}
+}
+.side .logo{display:flex;align-items:center;gap:10px;padding:0 8px 22px;font-family:var(--head);font-weight:600;font-size:18px}
+.side .logo i{width:36px;height:36px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center}
+.side a.nav{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;color:var(--sub)}
+.side a.nav.on{background:var(--accent-soft);color:var(--accent);font-weight:500}
+.side a.nav.on svg{stroke:var(--accent)}
+.side .status{margin-top:auto;border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.side .status small{color:var(--muted);font-size:12px;word-break:break-all}
+
+/* ---------- home ---------- */
+.head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.head h1{font-size:28px;font-weight:600}
+.head .who{display:flex;flex-direction:column;gap:2px;background:none;border:0;padding:0;text-align:left}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+@media (max-width:600px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.kpis .card{padding:14px}.kpis>.card:first-child,.kpis>.card:last-child{grid-column:1/-1}.kpi b{font-size:20px}}
+.kpi{display:flex;flex-direction:column;gap:4px}
+.kpi b{font-family:var(--head);font-weight:500;font-size:24px}
+.kpi small{font-size:12px}
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.mode{display:flex;align-items:center;gap:14px;border-radius:20px;padding:18px;background:var(--card);border:1px solid var(--line);text-align:left;width:100%}
+.mode .ico{width:48px;height:48px;border-radius:14px;background:var(--soft);display:flex;align-items:center;justify-content:center;flex:none}
+.mode .t{font-family:var(--head);font-weight:600;font-size:19px}
+.mode p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.mode.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.mode.primary p{color:#fff}
+.mode.primary .ico{background:rgba(255,255,255,.18)}
+@media (min-width:960px){.mode{flex-direction:column;align-items:flex-start;min-height:150px}}
+.panels{display:flex;flex-wrap:wrap;gap:14px}
+.panels>.card{flex:3 1 380px;min-width:0}
+.panels>.card.lb{flex:2 1 300px}
+.row{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--soft)}
+.row:last-child{border-bottom:0}
+.row.me{background:var(--accent-soft);border-radius:10px;padding:10px 8px;border-bottom:0}
+.row .pos{width:24px;font-family:var(--head);color:var(--muted)}
+.row .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.legend{display:flex;flex-direction:column;gap:9px;flex:1 1 200px;font-size:14px}
+.legend span i{width:14px;height:14px;border-radius:4px;display:inline-block;vertical-align:-2px;margin-right:8px}
+.empty{color:var(--muted);text-align:center;padding:24px 8px;line-height:1.7}
+
+/* ---------- muscle ---------- */
+.seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px}
+.seg button{border:0;background:none;padding:8px 14px;border-radius:9px;color:var(--muted);min-height:36px}
+.seg button.on{background:var(--soft);color:var(--text);font-weight:500}
+.muscle-wrap{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.body-card{flex:1 1 280px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.chips button{min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--card)}
+.chips button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.ex-list{flex:2 1 320px;display:flex;flex-direction:column;gap:10px}
+.ex{display:flex;align-items:center;gap:12px;padding:16px;border-radius:18px;background:var(--card);border:1px solid var(--line)}
+.ex.soon-box{background:none;border:1px dashed #C9CDD4;color:var(--muted)}
+.ex .t{font-family:var(--head);font-weight:500;font-size:17px}
+.ex .grow{flex:1;min-width:0}
+
+/* ---------- setup ---------- */
+.setup{display:grid;gap:16px;grid-template-columns:1fr}
+@media (min-width:960px){.setup{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start}}
+.steps{display:flex;flex-direction:column;gap:10px}
+.steps div{display:flex;gap:12px;align-items:flex-start;font-size:14px;line-height:1.6}
+.steps b{width:24px;height:24px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;flex:none}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+input.f,select.f{font:inherit;font-size:15px;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;min-height:46px;width:100%}
+.stepper{display:flex;align-items:center;justify-content:space-between}
+.stepper div{display:flex;align-items:center;gap:12px}
+.stepper button{width:44px;height:44px;border-radius:12px;border:0;background:var(--soft);font-size:20px}
+
+/* ---------- practice ---------- */
+.practice{display:flex;flex-direction:column;height:100vh;height:100dvh}
+.cam{position:relative;background:var(--cam);overflow:hidden;flex:1 1 auto;min-height:300px}
+.cam video,.cam canvas{position:absolute;inset:0;width:100%;height:100%}
+.cam video{object-fit:contain}
+.cam .top{position:absolute;left:14px;right:14px;top:14px;display:flex;align-items:center;gap:8px;z-index:3}
+.pill{background:#fff;border-radius:999px;padding:8px 12px;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.iconbtn{width:44px;height:44px;border-radius:12px;background:#fff;border:0;display:flex;align-items:center;justify-content:center}
+.ghost{position:absolute;left:14px;top:70px;width:130px;background:#fff;border-radius:14px;padding:10px;font-size:12px;color:var(--muted);z-index:3;display:flex;flex-direction:column;gap:4px}
+.cue{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:#fff;border-radius:999px;padding:10px 18px;font-family:var(--head);font-size:17px;white-space:nowrap;z-index:3;display:none}
+.cue.good{color:var(--good)} .cue.bad{color:var(--warn)}
+.depth{position:absolute;right:14px;top:80px;bottom:30px;width:12px;border-radius:999px;background:rgba(255,255,255,.18);z-index:3}
+.depth i{position:absolute;left:0;right:0;bottom:0;border-radius:999px;background:var(--skel);transition:height .15s}
+.depth em{position:absolute;left:-6px;right:-6px;height:2px;background:#FFC46B}
+.bigcount{display:none}
+.count{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:140px;font-family:var(--head);color:#fff;background:rgba(0,0,0,.45);z-index:5}
+.waitmsg{white-space:pre-line;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#E6E8EC;font-size:14px;text-align:center;z-index:2;line-height:1.7}
+.sheet{background:var(--card);border-radius:26px 26px 0 0;margin-top:-26px;position:relative;z-index:4;padding:20px 18px calc(22px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px}
+.bars{display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--sub)}
+.bars div{display:flex;align-items:center;gap:8px}
+.bars span:first-child{width:58px}
+.bars .tr{flex:1;height:7px;border-radius:4px;background:var(--soft);overflow:hidden}
+.bars .tr i{display:block;height:100%;border-radius:4px;background:var(--accent);transition:width .3s}
+.hist{display:none}
+@media (min-width:960px){
+  .practice{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;height:auto;align-items:start}
+  .cam{flex:none;aspect-ratio:16/9;border-radius:22px;min-height:0}
+  .sheet{margin-top:0;border-radius:20px;border:1px solid var(--line)}
+  .bigcount{display:flex;position:absolute;left:18px;bottom:18px;background:#fff;border-radius:18px;padding:10px 18px;align-items:baseline;gap:8px;z-index:3}
+  .bigcount b{font-family:var(--head);font-size:48px;line-height:1;color:var(--accent)}
+  .hist{display:flex;flex-direction:column}
+  .ring-sm{display:none}
+}
+
+/* ---------- duel ---------- */
+#duelPanel{display:none;flex-direction:column;gap:12px}
+body.duelmode #duelPanel{display:flex}
+body.duelmode #pracPanel,body.duelmode #pracBtns,body.duelmode .ghost,body.duelmode .bigcount{display:none!important}
+#pMode.big{font-family:var(--head);font-size:20px;padding:6px 16px;min-width:84px;justify-content:center}
+#pMode.hot{color:var(--bad)}
+.vsrow{display:flex;gap:12px;align-items:stretch}
+.opp{position:relative;flex:0 0 44%;aspect-ratio:4/3;background:var(--cam);border-radius:14px;overflow:hidden}
+.opp canvas{position:absolute;inset:0;width:100%;height:100%}
+.opp span{position:absolute;left:8px;bottom:8px;background:#fff;border-radius:999px;padding:3px 10px;font-size:12px;max-width:calc(100% - 16px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opp em{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#B4B9C2;font-style:normal;font-size:13px;text-align:center;padding:8px}
+.dside{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:8px}
+.codebox{display:flex;flex-direction:column;gap:2px}
+.codebox b{font-family:var(--head);font-size:38px;letter-spacing:6px;line-height:1.1}
+.vsl{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.vsl span{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vsl b{font-family:var(--head);font-weight:600;font-size:34px;line-height:1}
+.vsbar{height:10px;border-radius:999px;background:#8C96A3;overflow:hidden}
+.vsbar i{display:block;height:100%;width:50%;background:var(--accent);transition:width .3s}
+.prow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:14px;font-size:14px}
+.prow .grow{flex:1;min-width:90px}
+.ok{color:var(--good);border-color:#BFE3CC;background:#E7F6EC}
+.no{color:var(--muted)}
+.chip.rd{background:var(--accent);border-color:var(--accent);color:#fff}
+.duelcard{max-width:560px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+.or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
+.vsres{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;text-align:center}
+.vsres .card{padding:16px 10px}
+.vsres b{font-family:var(--head);font-size:44px;font-weight:600;display:block;line-height:1.1}
+.vsres .win{border-color:var(--accent);background:var(--accent-soft)}
+@media (min-width:960px){.vsrow{flex-direction:column}.opp{flex:none;width:100%;aspect-ratio:16/10}}
+
+/* ---------- รูปโปรไฟล์ / เลเวล / อันดับ ---------- */
+.avt{width:36px;height:36px;border-radius:50%;flex:none;background:var(--accent-soft);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;
+  font-family:var(--head);font-size:15px;overflow:hidden;position:relative}
+.avt img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.lvt{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:24px;padding:0 8px;border-radius:8px;background:var(--text);color:#fff;font-family:var(--head);font-size:13px}
+.mycard{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center}
+.mycard .bars2{display:flex;flex-direction:column;gap:10px}
+.tabs2{display:grid;grid-template-columns:1fr 1fr;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px}
+.tabs2 button{border:0;background:none;min-height:42px;border-radius:10px;font-family:var(--head);font-size:15px;color:var(--muted)}
+.tabs2 button.on{background:var(--accent);color:#fff}
+.avbig{width:84px;height:84px;font-size:32px;cursor:pointer}
+.avbig::after{content:"เปลี่ยนรูป";position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);color:#fff;font-family:var(--body,inherit);font-size:10px;padding:2px 0;text-align:center}
+#period button{white-space:nowrap}
+/* ---------- เกมเลนท่าทาง ---------- */
+.gstage{position:relative;background:#101215;overflow:hidden;height:100vh;height:100dvh;user-select:none}
+@media (min-width:960px){.gstage{height:calc(100vh - 48px);border-radius:22px}}
+.gbox{position:absolute;left:0;top:0;width:100%;height:100%;overflow:hidden}
+.gstage video,.gstage img.gfeed{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);opacity:.9}
+.gbox video,.gbox img.gfeed{object-fit:fill}
+.gstage canvas{position:absolute;inset:0;width:100%;height:100%}
+.glanes{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);pointer-events:none}
+.glanes div{border-right:2px dashed rgba(255,255,255,.28);transition:background .2s}
+.glanes div:last-child{border-right:0}
+.glanes div.me{background:rgba(124,92,255,.16)}
+.ghit{position:absolute;left:0;right:0;top:76%;height:4px;background:rgba(255,255,255,.75);box-shadow:0 0 12px rgba(255,255,255,.8)}
+.gcard{position:absolute;top:0;width:min(24%,26vh);aspect-ratio:1;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:#fff;font-family:var(--head);font-size:clamp(13px,2.4vw,20px);box-shadow:0 8px 18px rgba(0,0,0,.35);border:3px solid #fff;will-change:transform}
+.gcard img,.gcard svg{width:70%;height:62%;object-fit:contain}
+.gcard{opacity:.55;transition:opacity .2s}
+.gcard.act{opacity:1;box-shadow:0 0 0 4px #fff,0 0 26px 6px rgba(255,255,255,.65)}
+.gcard.hit{animation:gpop .45s forwards;opacity:1}.gcard.miss{filter:grayscale(1);opacity:.5}
+@keyframes gpop{to{transform:var(--tf) scale(1.35);opacity:0}}
+.gtop{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:10px;padding:12px 14px;z-index:5;color:#fff}
+.gtop b{font-family:var(--head);font-size:28px;font-weight:600}
+.gtop .pill2{background:rgba(20,22,26,.6);border-radius:999px;padding:4px 12px;font-size:14px}
+.gmsg{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);z-index:6;color:#fff;font-family:var(--head);text-align:center;
+  font-size:clamp(22px,5vw,46px);text-shadow:0 2px 14px rgba(0,0,0,.8);white-space:pre-line;pointer-events:none;width:92%}
+.gfx{position:absolute;z-index:6;font-family:var(--head);font-size:26px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.7);pointer-events:none;animation:gfx .9s forwards}
+@keyframes gfx{to{transform:translateY(-50px);opacity:0}}
+.gyou{position:absolute;bottom:14px;z-index:5;width:33.33%;display:flex;justify-content:center;transition:left .2s;pointer-events:none}
+.gyou span{background:#fff;border-radius:999px;padding:4px 12px;font-size:14px;font-family:var(--head);color:var(--accent)}
+.gend{position:absolute;inset:0;z-index:8;background:rgba(16,18,21,.6);display:flex;align-items:center;justify-content:center;padding:16px}
+.gend .card{width:min(420px,100%);display:flex;flex-direction:column;gap:12px}
+.qrbox{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.qrbox .qr{background:#fff;padding:10px;border-radius:14px;border:1px solid var(--line)}
+.qrbox .qr img{display:block;width:200px;height:200px;image-rendering:pixelated}
+.paircode{font-family:var(--head);font-size:44px;letter-spacing:8px;color:var(--accent)}
+.pipcam{position:absolute;right:12px;top:64px;width:22%;max-width:200px;border-radius:12px;overflow:hidden;border:2px solid #fff;z-index:5;display:none}
+/* ---------- หน้าฝึก (มือใหม่ / มือโปร) แบบเต็มกล้อง ---------- */
+.pip,.countbox,.solobtns,.explain{display:none}
+body.solo .sheet{display:none}
+body.solo .practice{display:block}
+body.solo .cam{height:100vh;height:100dvh;min-height:0}
+@media (min-width:960px){body.solo .cam{height:calc(100vh - 48px);aspect-ratio:auto;border-radius:22px}}
+body.solo .ghost,body.solo .bigcount{display:none!important}
+body.solo .pip{display:block;position:absolute;left:14px;top:72px;width:30%;max-width:210px;aspect-ratio:3/4;border-radius:16px;overflow:hidden;
+  background:#fff;border:2px solid #fff;box-shadow:0 6px 18px rgba(0,0,0,.35);z-index:3}
+.pip video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;background:#000}
+.pip.hasvid video{display:block}.pip.hasvid svg{display:none}
+.pip svg{position:absolute;inset:8% 4% 14%;width:92%;height:78%}
+.pip span{position:absolute;left:6px;bottom:6px;font-size:11px;background:rgba(20,22,26,.7);color:#fff;border-radius:999px;padding:2px 8px}
+body.solo .countbox{display:flex;position:absolute;left:14px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:3;flex-direction:column;align-items:center;gap:4px}
+.countbox svg{background:rgba(20,22,26,.55);border-radius:50%;backdrop-filter:blur(4px)}
+.countbox .clbl{color:#fff;font-family:var(--head);font-size:15px;text-shadow:0 1px 6px rgba(0,0,0,.7)}
+.scorechip{position:absolute;left:112px;top:-4px;white-space:nowrap;background:#fff;border-radius:999px;padding:4px 10px;font-family:var(--head);font-size:15px;color:var(--accent);
+  box-shadow:0 4px 12px rgba(0,0,0,.25);opacity:0;transition:opacity .3s}
+.scorechip.show{opacity:1}
+body.solo .solobtns{display:flex;position:absolute;right:44px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:3;gap:8px}
+.solobtns .btn{min-height:46px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+body.solo .explain:not(:empty){display:block;position:absolute;left:50%;bottom:180px;transform:translateX(-50%);width:min(92%,560px);z-index:3;
+  background:rgba(255,255,255,.95);border-radius:16px;padding:12px 16px;font-size:16px;line-height:1.6;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.explain.bad{color:var(--warn);background:#FFF4E0!important}
+/* ---------- lesson ---------- */
+#followPanel{display:none;flex-direction:column;gap:12px}
+body.followmode #followPanel{display:flex}
+body.followmode #pracPanel,body.followmode #pracBtns,body.followmode .ghost,body.followmode .bigcount{display:none!important}
+.lcoach{position:relative}
+.lcoach video{width:100%;border-radius:12px;display:none;background:#000}
+.lcoach.hasvid video{display:block}.lcoach.hasvid svg{display:none}
+.fcue{font-family:var(--head);font-weight:600;font-size:34px;line-height:1.1;color:var(--accent)}
+.fcount{display:flex;align-items:baseline;gap:8px}.fcount b{font-family:var(--head);font-size:40px;font-weight:600;line-height:1}
+/* ---------- การ์ดเลือกท่า ---------- */
+.exgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (min-width:960px){.exgrid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}}
+.xc{position:relative;display:block;aspect-ratio:4/5;border-radius:22px;overflow:hidden;color:#fff;
+  background:radial-gradient(120% 90% at 70% 20%,#5B3DF5 0%,#2A2F7A 45%,#141B33 100%);box-shadow:0 6px 18px rgba(20,22,26,.12)}
+.xc:nth-child(3n+2){background:radial-gradient(120% 90% at 30% 15%,#3E7BFA 0%,#1E2A6F 50%,#111833 100%)}
+.xc:nth-child(3n){background:radial-gradient(120% 90% at 60% 20%,#8E5BF5 0%,#3A246F 50%,#160F2E 100%)}
+.xc .xart{position:absolute;inset:8% 8% 26%;display:flex;align-items:center;justify-content:center;opacity:.95}
+.xc .xart svg{width:100%;height:100%}
+.xc img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.xc .xshade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(8,10,20,.78) 100%)}
+.xc .xinfo{position:absolute;left:14px;right:14px;bottom:12px;display:flex;flex-direction:column;gap:2px}
+.xc .xinfo b{font-family:var(--head);font-weight:600;font-size:21px;line-height:1.15}
+.xc .xinfo small{font-size:12px;opacity:.85}
+.xc .xtag{position:absolute;top:10px;left:10px;font-size:11px;padding:4px 9px;border-radius:999px;background:rgba(255,255,255,.92);color:var(--accent);font-weight:500}
+.xc.soon{filter:saturate(.35);opacity:.6;cursor:default}.xc.soon .xtag{color:var(--muted)}
+/* หน้าเลือกโหมดฝึก: อยู่กลางจอ การ์ดแบบเดียวกับการ์ดเลือกท่า (ใส่รูปเองได้ที่ img/mode/) */
+.trmodes{min-height:calc(100dvh - 190px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;text-align:center}
+@media (min-width:960px){.trmodes{min-height:calc(100vh - 120px)}}
+.modegrid{display:grid;grid-template-columns:repeat(2,minmax(0,250px));gap:clamp(12px,4vw,32px);justify-content:center;width:100%}
+.trmodes h1{font-size:28px;font-weight:600}
+.xc.mc{text-align:left}
+.xc.mc:active{transform:scale(.98)}
+.exgrid.mini{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.exgrid.mini .xc{aspect-ratio:1/1;border-radius:16px;cursor:pointer;border:3px solid transparent}
+.exgrid.mini .xc.sel{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.exgrid.mini .xc .xinfo b{font-size:15px}.exgrid.mini .xc .xinfo small,.exgrid.mini .xc .xtag{display:none}
+.exgrid.mini .xc.sel .xtag{display:block}
+.exgrid.mini .xc.locked{cursor:default}
+.rk{vertical-align:middle;object-fit:contain}
+.animal{display:flex;align-items:center;gap:14px}
+.animal .ai{position:relative;width:84px;height:84px;border-radius:22px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;font-size:48px;flex:none;overflow:hidden}
+.animal .ai img{width:100%;height:100%;object-fit:contain}
+.tiers{display:flex;justify-content:space-between;gap:4px;font-size:22px}
+.tiers span{flex:1;text-align:center;padding:6px 0;border-radius:10px;opacity:.35}
+.tiers span.on{opacity:1;background:var(--accent-soft)}
+.hrpill b{font-family:var(--head)}
+/* ---------- หน้าผล: สัตว์เป็นพื้นหลัง (hero) ---------- */
+.hero{position:relative;overflow:hidden;margin:-22px -18px 0;display:flex;flex-direction:column;
+  background:linear-gradient(180deg,var(--sky1) 0px,var(--sky2) 300px,var(--bg) 520px)}
+@media (min-width:960px){.hero{margin:0;border-radius:28px}}
+.hero .scene{position:absolute;left:0;right:0;top:0;width:100%;height:470px}
+.hero .beast{position:relative;z-index:1;height:220px;margin-top:4px;display:flex;align-items:flex-end;justify-content:center;pointer-events:none}
+.hero .beast span{font-size:170px;line-height:1;filter:drop-shadow(0 14px 18px rgba(0,0,0,.22))}
+.hero .beast img{position:absolute;bottom:0;max-height:230px;max-width:88%;object-fit:contain;filter:drop-shadow(0 14px 18px rgba(0,0,0,.25))}
+.hero .nobeast{height:70px}
+.hero.short{background:linear-gradient(180deg,var(--sky1) 0px,var(--sky2) 140px,var(--bg) 330px)}.hero.short .fade{top:120px}
+.hero .fade{position:absolute;left:0;right:0;top:250px;bottom:0;background:linear-gradient(180deg,rgba(246,247,249,0) 0px,rgba(246,247,249,.75) 120px,var(--bg) 220px)}
+.hero .htop{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:16px 18px 0;color:var(--ink)}
+.hero .htop small{font-size:13px;opacity:.85}
+.hero .badge-an{background:rgba(255,255,255,.88);color:var(--text);border-radius:999px;padding:6px 12px;font-family:var(--head);font-size:15px;backdrop-filter:blur(6px)}
+.hero .hbottom{position:relative;z-index:2;padding:6px 18px 18px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.hero .ringbox{background:rgba(255,255,255,.9);border-radius:50%;padding:8px;box-shadow:0 10px 30px rgba(20,22,26,.18);backdrop-filter:blur(8px)}
+.hero .hname{font-family:var(--head);font-weight:600;font-size:26px;line-height:1.1;text-align:center;text-shadow:0 1px 12px rgba(255,255,255,.9)}
+.hero .stats3{width:100%}
+.hero .stats3 .card{background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border-color:rgba(255,255,255,.9)}
+.lrow{display:flex;gap:14px;align-items:center}
+.lcoach{flex:0 0 120px;background:var(--soft);border-radius:16px;padding:6px;display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--muted)}
+.lcoach svg{width:100%;height:auto}
+.ltext{flex:1;min-width:0}
+.ltext h3{font-size:19px;font-weight:600;margin-bottom:4px}
+.ltext p{margin:0;font-size:14px;line-height:1.6;color:var(--sub)}
+.ldots{display:flex;gap:5px}
+.ldots i{width:22px;height:6px;border-radius:3px;background:var(--soft)}
+.ldots i.on{background:var(--accent)} .ldots i.done{background:var(--good-dot)} .ldots i.skip{background:#C9CDD4}
+.lmsg{font-size:15px;padding:10px 12px;border-radius:12px;background:var(--warn-bg);color:var(--warn);font-family:var(--head)}
+.lmsg.good{background:#E7F6EC;color:var(--good)}
+@media (min-width:960px){.lrow{flex-direction:column;align-items:stretch}.lcoach{flex:none}.lcoach svg{max-height:220px}}
+.exseg{margin-bottom:2px}
+
+/* ---------- duel game HUD ---------- */
+.hud,.coin,.giveup{display:none}
+body.duel-play .hud{display:block;position:absolute;left:10px;right:10px;top:10px;z-index:4;border-radius:20px;padding:12px 14px 14px;
+  background:linear-gradient(180deg,#1E2A4F,#141B33);color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+body.duel-play .coin{display:flex;position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:4;width:104px;height:104px;border-radius:50%;
+  background:#F5C518;border:6px solid #FFE27A;box-shadow:0 0 0 5px rgba(245,197,24,.35),0 8px 20px rgba(0,0,0,.35);align-items:center;justify-content:center}
+.coin b{font-family:var(--head);font-weight:600;font-size:48px;color:#1A2240;line-height:1}
+.coin.pop{animation:pop .45s ease}
+@keyframes pop{0%{transform:translateX(-50%) scale(1)}40%{transform:translateX(-50%) scale(1.28)}100%{transform:translateX(-50%) scale(1)}}
+body.duel-play .giveup{display:block;position:absolute;right:12px;bottom:14px;z-index:4;background:rgba(0,0,0,.5);color:#fff;border:0;border-radius:999px;padding:8px 14px;font-size:13px}
+body.duel-play .cam .top,body.duel-play .ghost,body.duel-play .depth{display:none}
+.hud-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.hp{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.hp b{font-family:var(--head);font-size:15px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hp small{font-size:11px;color:#B7C0DA}
+.av{width:46px;height:52px;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);display:flex;align-items:center;justify-content:center}
+.av span{width:40px;height:46px;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);background:#2C3A66;display:flex;align-items:center;justify-content:center;font-family:var(--head);font-size:20px;color:#fff}
+.ht{text-align:center}.ht small{display:block;font-size:11px;letter-spacing:2px;color:#B7C0DA}
+.ht b{font-family:var(--head);font-weight:600;font-size:38px;line-height:1}
+.ht b.hot{color:#FF6B6B}
+.hud-score{display:flex;align-items:center;gap:10px;margin-top:8px}
+.hud-score b{font-family:var(--head);font-weight:600;font-size:40px;line-height:1;min-width:44px;text-align:center}
+.hud-score .g{color:#3DDC84}.hud-score .r{color:#FF5A5A}
+.tug{flex:1;height:14px;border-radius:999px;background:#FF5A5A;position:relative;overflow:visible}
+.tug i{position:absolute;left:0;top:0;bottom:0;width:50%;background:#3DDC84;border-radius:999px 0 0 999px;transition:width .35s}
+.tug em{position:absolute;top:50%;left:50%;width:12px;height:20px;border-radius:6px;background:#fff;transform:translate(-50%,-50%);transition:left .35s}
+@media (max-width:959px){body.duel-play .sheet{display:none}}
+.dex{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dex button{min-height:52px;border-radius:14px;border:1px solid var(--line);background:var(--card);font-family:var(--head);font-size:16px}
+.dex button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lv{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.lv button{min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:14px}
+.lv button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:500}
+
+/* ---------- result / me ---------- */
+.stats3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.stats3 .card{padding:12px 14px}
+.stats3 b{font-family:var(--head);font-weight:500;font-size:24px;display:block}
+.repbars{display:flex;align-items:flex-end;gap:5px;height:70px}
+.repbars{justify-content:center}
+.repbars i{flex:1 1 0;max-width:34px;border-radius:4px;background:var(--accent);min-height:6px}
+.repbars i.bad{background:var(--bad)}
+.grid2{display:grid;gap:16px;grid-template-columns:1fr}
+@media (min-width:960px){.grid2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.badges{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.badge{text-align:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 4px;font-size:11px;color:var(--muted)}
+.badge svg{display:block;margin:0 auto 4px}
+.badge.off{opacity:.4}
+.xbar{height:8px;border-radius:999px;background:var(--soft);overflow:hidden}
+.xbar i{display:block;height:100%;border-radius:999px}
+
+/* ---------- modal / toast ---------- */
+.modal{position:fixed;inset:0;background:rgba(20,22,26,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal .box{background:var(--card);border-radius:22px;max-width:400px;width:100%;padding:24px;display:flex;flex-direction:column;gap:14px}
+#toast{position:fixed;left:50%;top:18px;transform:translate(-50%,-30px);opacity:0;z-index:60;background:var(--text);color:#fff;padding:12px 18px;border-radius:14px;transition:all .3s;white-space:nowrap;font-size:14px}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" aria-label="เมนูหลัก">
+    <div class="logo"><i><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 12h3M18 12h3M6 8v8M18 8v8M9 10v4M15 10v4M9 12h6"/></svg></i>AI Workout Coach</div>
+    <a class="nav" data-r="home" href="#/home"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#5F6672" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>หน้าแรก</a>
+    <a class="nav" data-r="train" href="#/train"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#5F6672" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></svg>ฝึกท่า</a>
+    <a class="nav" data-r="duel" href="#/duel"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#5F6672" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l7-7"/><path d="M14 4h6v6l-9 9-6-6z"/></svg>ดวล 1:1</a>
+    <a class="nav" data-r="game" href="#/game"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#5F6672" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="12" rx="4"/><path d="M8 11v4M6 13h4"/><circle cx="15.5" cy="12" r=".8"/><circle cx="17.5" cy="14.5" r=".8"/></svg>เกม</a>
+    <a class="nav" data-r="muscle" href="#/muscle"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#5F6672" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="4.5" r="2"/><path d="M8 8h8l-1 7h-6z"/><path d="M9 15l-1 6"/><path d="M15 15l1 6"/></svg>กล้ามเนื้อ</a>
+    <a class="nav" data-r="rank" href="#/rank"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#5F6672" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/></svg>อันดับ</a>
+    <a class="nav" data-r="me" href="#/me"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#5F6672" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>โปรไฟล์</a>
+    <div class="status"><span><span class="dot" id="ciraDot"></span> <span id="ciraText">CiRA CORE ยังไม่ทำงาน</span></span><small id="ciraSub">กด Run ใน CiRA CORE</small><small id="pubLink"></small></div>
+  </aside>
+
+  <main id="main">
+    <!-- ===== หน้าแรก ===== -->
+    <section class="page" id="p-home">
+      <div class="head">
+        <button class="who" onclick="go('me')" style="display:flex;flex-direction:row;align-items:center;gap:12px"><span id="hAvt"></span><span style="display:flex;flex-direction:column"><span class="muted" id="greet">สวัสดี</span><h1 id="hName">-</h1></span></button>
+        <div style="display:flex;align-items:center;gap:10px"><span class="chip" id="hRank">-</span><a class="btn primary" href="#/train">เริ่มฝึก</a></div>
+      </div>
+      <div class="kpis">
+        <div class="card" style="display:flex;align-items:center;gap:16px">
+          <svg width="76" height="76" viewBox="0 0 76 76" id="goalRing" role="img" aria-label="เป้าวันนี้"></svg>
+          <div class="kpi"><span class="muted" style="font-size:13px">เป้าวันนี้</span><b id="kGoal">0 / 30 ครั้ง</b><small class="muted" id="kGoalSub"></small></div>
+        </div>
+        <div class="card kpi"><span class="muted" style="font-size:13px">ฝึกต่อเนื่อง</span><b id="kStreak">0 วัน</b><div id="kStreakBars" style="display:flex;gap:5px;margin-top:6px"></div></div>
+        <div class="card kpi"><span class="muted" style="font-size:13px">คะแนนท่าเฉลี่ย 7 วัน</span><b id="kForm">-</b><small id="kFormSub" class="muted"></small></div>
+        <div class="card kpi"><span class="muted" style="font-size:13px" id="kNext">-</span><div class="xbar" style="margin:8px 0"><i id="kNextBar" style="width:0;background:#8C96A3"></i></div><small class="muted" id="kPos"></small></div>
+      </div>
+      <div class="modes">
+        <a class="mode primary" href="#/train"><span class="ico"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></span><span><span class="t">ฝึกท่า</span><p>มือใหม่ดูคลิปโค้ช หรือมือโปรเก็บ EXP</p></span></a>
+        <a class="mode" href="#/duel"><span class="ico"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#14161A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l7-7"/><path d="M14 4h6v6l-9 9-6-6z"/><path d="M20 20l-7-7"/><path d="M10 4H4v6l3 3"/></svg></span><span><span class="t">ดวล 1:1</span><p>แข่ง 60 วินาที นับเฉพาะครั้งที่ทำถูก</p></span></a>
+        <a class="mode" href="#/muscle"><span class="ico"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#14161A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="4.5" r="2"/><path d="M8 8h8l-1 7h-6z"/><path d="M9 15l-1 6"/><path d="M15 15l1 6"/><path d="M8 8l-3 5"/><path d="M16 8l3 5"/></svg></span><span><span class="t">เลือกกล้ามเนื้อ</span><p>แตะจุดที่อยากฝึก แล้วเริ่มได้เลย</p></span></a>
+        <a class="mode" href="#/setup" onclick="chooseEx('squat', 'beginner')"><span class="ico"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#14161A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="4" r="2"/><path d="M9 7l2 6h-5"/><path d="M6 13l3 4v4"/><path d="M11 13l4 2v6"/><path d="M10 9h6"/></svg></span><span><span class="t">มือใหม่: สควอท</span><p>ดูคลิปโค้ช ฟังวิธีทำ แล้วทำตาม AI นับให้</p></span></a>
+        <a class="mode" href="#/game"><span class="ico"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#14161A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="12" rx="4"/><path d="M8 11v4M6 13h4"/><circle cx="15.5" cy="12" r=".8"/><circle cx="17.5" cy="14.5" r=".8"/></svg></span><span><span class="t">เกมเลนท่าทาง</span><p>ท่าไหลลงมา 3 เลน ขยับไปเลนแล้วทำท่าให้ทัน</p></span></a>
+      </div>
+      <div class="panels">
+        <div class="card" style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:18px">กล้ามเนื้อที่ฝึกสัปดาห์นี้</h2><a href="#/muscle" style="font-size:13px;color:var(--accent)">ดูทั้งหมด</a></div>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:22px"><div id="heatBody"></div><div class="legend" id="heatLegend"></div></div>
+        </div>
+        <div class="card lb"><h2 style="font-size:18px;margin-bottom:8px">อันดับสัปดาห์นี้</h2><div id="homeBoard"></div></div>
+      </div>
+    </section>
+
+    <!-- ===== กล้ามเนื้อ ===== -->
+    <section class="page" id="p-muscle">
+      <div class="head"><h1>เลือกกล้ามเนื้อ</h1><div class="seg"><button id="vFront" class="on" onclick="setView('front')">ด้านหน้า</button><button id="vBack" onclick="setView('back')">ด้านหลัง</button></div></div>
+      <div class="muscle-wrap">
+        <div class="card body-card"><div id="mBody"></div><div class="chips" id="mChips"></div></div>
+        <div class="ex-list"><span class="muted" style="font-size:13px" id="mFor"></span><div id="mList" style="display:flex;flex-direction:column;gap:10px"></div></div>
+      </div>
+    </section>
+
+    <!-- ===== ตั้งกล้อง ===== -->
+    <section class="page" id="p-train">
+      <div id="trModes" class="trmodes">
+        <h1>คุณต้องการฝึกโหมดแบบไหน</h1>
+        <div class="modegrid">
+          <a class="xc mc" href="#/train?m=beginner"><div class="xart"><svg viewBox="0 0 160 150"><g fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><rect x="22" y="22" width="116" height="78" rx="14" opacity=".9"/><path d="M70 45v32l26-16z" fill="#fff"/><path d="M50 124h60" opacity=".7"/></g></svg></div><img src="/static/img/mode/beginner.jpg" alt="" onerror="this.remove()"><div class="xshade"></div>
+            <div class="xinfo"><b>มือใหม่</b><small>ดูคลิปโค้ช + ฟังวิธีทำ แล้วทำตาม</small></div></a>
+          <a class="xc mc" href="#/train?m=pro"><div class="xart"><svg viewBox="0 0 160 150"><g fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><circle cx="80" cy="66" r="44" opacity=".9"/><circle cx="80" cy="66" r="24" opacity=".9"/><circle cx="80" cy="66" r="5" fill="#fff"/><path d="M58 108l-10 30 32-14 32 14-10-30" opacity=".75"/></g></svg></div><img src="/static/img/mode/pro.jpg" alt="" onerror="this.remove()"><div class="xshade"></div>
+            <div class="xinfo"><b>มือโปร</b><small>นับจำนวนครั้ง เก็บ EXP</small></div></a>
+        </div>
+      </div>
+      <div id="trEx" style="display:none;flex-direction:column;gap:18px">
+        <div class="head"><div><a href="#/train" style="font-size:14px;color:var(--accent)">← เปลี่ยนโหมด</a>
+          <h1 style="margin-top:6px" id="trTitle">เลือกท่า</h1><span class="muted" style="font-size:13px" id="trSub"></span></div></div>
+        <div class="exgrid" id="exGrid"></div>
+      </div>
+    </section>
+
+    <section class="page" id="p-setup">
+      <div class="head"><div><a href="#/train" id="sBack" style="font-size:14px;color:var(--accent)">← เลือกท่าอื่น</a>
+        <h1 id="sTitle" style="margin-top:6px">วิดพื้น</h1><span class="muted" style="font-size:13px" id="sSub"></span></div></div>
+      <div class="setup">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card" style="padding:14px"><span class="muted" style="font-size:13px">วางกล้องแบบนี้</span><div id="sPlace"></div></div>
+          <div class="steps" id="sSteps"></div>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column;gap:14px">
+          <div class="prow" style="border:0;padding:0"><span class="grow muted" style="font-size:13px">เล่นในชื่อ <b style="color:var(--text)" class="meName">-</b></span><a href="#/me" style="font-size:13px;color:var(--accent)">โปรไฟล์</a></div>
+          <input type="hidden" id="sName"><datalist id="plist"></datalist>
+          <label class="f">กล้อง<select class="f" id="sCam"><option value="">กล้องเริ่มต้น</option></select></label>
+          <button class="btn" id="sFlip" type="button">สลับกล้องหน้า / หลัง</button>
+          <div class="stepper"><span>เป้าหมาย (ครั้ง)</span><div><button type="button" onclick="setGoal(-5)" aria-label="ลด">−</button><b class="num" style="font-size:22px;min-width:32px;text-align:center" id="sGoal">10</b><button type="button" onclick="setGoal(5)" aria-label="เพิ่ม">+</button></div></div>
+          <label style="display:flex;align-items:center;gap:10px;font-size:14px"><input type="checkbox" id="voiceOn" checked style="width:20px;height:20px"> เสียงพูดภาษาไทย</label>
+          <div class="err" id="sErr"></div>
+          <button class="btn primary block" id="lessonBtn" style="min-height:56px;font-size:18px;flex-direction:column;gap:0" onclick="startFollow()">มือใหม่<small style="font-family:var(--body,inherit);font-size:12px;opacity:.85">ดูคลิปโค้ช + ฟังวิธีทำ แล้วทำตาม</small></button>
+          <button class="btn primary block" id="startBtn" style="min-height:56px;font-size:18px">เริ่มฝึก</button>
+          <small class="muted" id="sStatus"></small>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== ฝึกท่า ===== -->
+    <section class="page" id="p-practice">
+      <div class="practice">
+        <div class="cam" id="cam">
+          <video id="video" autoplay muted playsinline></video>
+          <canvas id="overlay"></canvas>
+          <div class="waitmsg" id="waitMsg"></div>
+          <div class="pip" id="pip"><video id="pipVid" muted loop playsinline preload="auto"></video><svg id="pipFig" viewBox="0 0 160 150" role="img" aria-label="ท่าตัวอย่าง"></svg><span id="pipLbl">ท่าที่ถูก</span></div>
+          <div class="explain" id="explain" aria-live="polite"></div>
+          <div class="countbox"><svg id="soloRing" width="124" height="124" viewBox="0 0 116 116" role="img" aria-label="จำนวนครั้ง"></svg><span class="clbl" id="soloLbl">-</span><span class="scorechip" id="scoreChip"></span></div>
+          <div class="solobtns"><button class="btn" id="pauseBtn2" onclick="togglePause()">พัก</button><button class="btn primary" onclick="stopSet()">จบเซต</button></div>
+          <div class="hud" aria-live="polite">
+            <div class="hud-row">
+              <div class="hp"><div class="av" id="hAvMe"><span>?</span></div><b id="hNmMe">คุณ</b><small id="hEloMe"></small></div>
+              <div class="ht"><small>เวลา</small><b id="hTime">1:00</b></div>
+              <div class="hp"><div class="av" id="hAvOp"><span>?</span></div><b id="hNmOp">เพื่อน</b><small id="hEloOp"></small></div>
+            </div>
+            <div class="hud-score"><b class="g" id="hScMe">0</b><div class="tug"><i id="hTug"></i><em id="hKnob"></em></div><b class="r" id="hScOp">0</b></div>
+          </div>
+          <div class="coin" id="hCoin"><b id="hCoinN">0</b></div>
+          <button class="giveup" onclick="leaveRoom()">ยอมแพ้</button>
+          <div class="top"><button class="iconbtn" id="flipBtn" onclick="flipCamera()" aria-label="สลับกล้องหน้า/หลัง" style="order:9"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#14161A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3v12H4z"/><path d="M9.5 13.5a2.5 2.5 0 0 0 4.6 1.4M14.5 12.5a2.5 2.5 0 0 0-4.6-1.4"/><path d="M14 15h1.2v-1.3M10 11H8.8v1.3"/></svg></button><button class="iconbtn" onclick="stopSet()" aria-label="จบเซต"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#14161A" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            <span class="pill" id="pMode">ฝึกท่า · วิดพื้น</span><span class="pill hrpill" id="pHr" style="margin-left:auto;display:none;color:var(--bad)">♥ <b>--</b></span><span class="pill" id="pNet" style="margin-left:auto"><span class="dot" id="pDot"></span><span id="pFps">CiRA</span></span></div>
+          <div class="ghost"><span id="ghostFig"></span><span id="ghostText">ท่าที่ถูก</span></div>
+          <div class="cue" id="cue"></div>
+          <div class="depth"><i id="dBar" style="height:100%"></i><em id="dLine" style="bottom:50%"></em></div>
+          <div class="bigcount"><b id="bigReps">0</b><span class="muted" id="bigGoal">/ 10 ครั้ง</span></div>
+          <div class="count" id="countdown"></div>
+        </div>
+        <div class="sheet">
+          <div id="duelPanel">
+            <div class="vsrow">
+              <div class="opp"><canvas id="oppCanvas"></canvas><em id="oppWait">รอเพื่อนเข้าห้อง</em><span id="oppName">เพื่อน</span></div>
+              <div class="dside">
+                <div class="codebox" id="dCodeBox"><span class="muted" style="font-size:13px">รหัสห้อง</span><b id="dCode">----</b>
+                  <button class="btn" style="min-height:40px" onclick="copyRoom()">ส่งลิงก์ชวนเพื่อน</button></div>
+                <div id="dScore" style="display:none;flex-direction:column;gap:8px">
+                  <div class="vsl"><span>คุณ</span><b id="dMe" style="color:var(--accent)">0</b></div>
+                  <div class="vsbar"><i id="vsFill"></i></div>
+                  <div class="vsl"><span id="dOppLabel">เพื่อน</span><b id="dOpp">0</b></div>
+                </div>
+              </div>
+            </div>
+            <div id="dLobby" style="display:flex;flex-direction:column;gap:10px">
+              <span class="muted" style="font-size:13px" id="dExLbl">เลือกท่าที่จะแข่ง</span>
+              <div class="exgrid mini" id="dExGrid"></div>
+              <div id="dPlayers" style="display:flex;flex-direction:column;gap:8px"></div>
+              <div class="tip" id="dHint"></div>
+              <div class="err" id="dErr"></div>
+              <button class="btn primary block" id="dReady" onclick="toggleReady()" disabled>พร้อม</button>
+            </div>
+            <button class="btn block" onclick="leaveRoom()" id="dLeave">ออกจากห้อง</button>
+          </div>
+          <div id="followPanel">
+            <div class="lrow">
+              <div class="lcoach" id="coachBox"><video id="coachVid" muted loop playsinline preload="auto"></video><svg id="lFig" viewBox="0 0 160 150" role="img" aria-label="ท่าตัวอย่างจากโค้ช"></svg><span id="coachLbl">ท่าของโค้ช</span></div>
+              <div class="ltext"><span class="muted" style="font-size:13px" id="fPhase">ฟังวิธีทำก่อน</span><div class="fcue" id="fCue">-</div><p id="fText"></p></div>
+            </div>
+            <div class="fcount"><b id="fOk">0</b><span class="muted">/ <span id="fGoal">10</span> ครั้งที่ทำถูก</span></div>
+            <div class="xbar"><i id="lHold" style="width:0;background:var(--good-dot);transition:width .3s"></i></div>
+            <div class="lmsg good" id="lMsg">เตรียมตัว…</div>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px"><button class="btn" id="fCadBtn" onclick="toggleCadence()">เสียงนำจังหวะ: เปิด</button><button class="btn primary" onclick="stopSet()">จบ</button></div>
+          </div>
+          <div id="pracPanel" style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:16px">
+            <svg class="ring-sm" width="104" height="104" viewBox="0 0 116 116" id="repRing" role="img" aria-label="จำนวนครั้ง"></svg>
+            <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="muted" style="font-size:13px">คะแนนครั้งล่าสุด</span><b class="num" style="font-size:30px;color:var(--accent)" id="lastScore">-</b></div>
+              <div class="bars"><div><span>ความลึก</span><span class="tr"><i id="bDepth" style="width:0"></i></span></div><div><span>ลำตัวตรง</span><span class="tr"><i id="bBody" style="width:0"></i></span></div><div><span>จังหวะ</span><span class="tr"><i id="bTempo" style="width:0"></i></span></div></div>
+            </div>
+          </div>
+          <div class="tip" id="hint" style="display:none"></div>
+          <div class="hist"><h3 style="font-size:16px;margin-bottom:6px">ประวัติในเซตนี้</h3><div id="histList"><div class="empty" style="padding:10px">ยังไม่มี</div></div></div>
+          </div>
+          <div id="pracBtns" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+            <button class="btn" id="pauseBtn" onclick="togglePause()">พัก</button>
+            <button class="btn primary" id="stopBtn" onclick="stopSet()">จบเซต</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== สรุปผล ===== -->
+    <section class="page" id="p-result"><div id="resultBox" style="display:flex;flex-direction:column;gap:16px;max-width:720px;width:100%;margin:0 auto"></div></section>
+
+    <!-- ===== อันดับ ===== -->
+    <section class="page" id="p-rank">
+      <div class="head"><h1>อันดับ</h1></div>
+      <div class="card" id="rankMe"></div>
+      <div class="tabs2" id="rankTabs"><button data-t="train" class="on">อันดับการฝึก</button><button data-t="rank">อันดับแรงค์</button></div>
+      <div class="grid2">
+        <div class="card" style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><small class="muted" id="rankNote"></small>
+            <div class="seg" id="period"><button data-p="day">วันนี้</button><button data-p="week" class="on">7 วัน</button><button data-p="all">ทั้งหมด</button></div></div>
+          <div id="rankList"></div></div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card"><h2 style="font-size:17px;margin-bottom:8px">ความเคลื่อนไหวล่าสุด</h2><div id="feedList"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== โปรไฟล์ ===== -->
+    <section class="page" id="p-me"><div id="meBox" style="display:flex;flex-direction:column;gap:16px"></div></section>
+
+    <!-- ===== ดวล ===== -->
+    <section class="page" id="p-game">
+      <div id="gMenu" style="display:flex;flex-direction:column;gap:18px">
+        <div class="head"><h1>เกม</h1></div>
+        <div class="card" style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:14px;align-items:center">
+            <img src="/static/img/game/cover.png" alt="" onerror="this.style.display='none'" style="width:120px;height:120px;object-fit:cover;border-radius:16px">
+            <div><h2 style="font-size:20px">เลนท่าทาง</h2><p class="muted" style="font-size:14px;margin-top:4px">การ์ดท่าไหลลงมา 3 เลน ใบที่มาก่อน (มีขอบเรือง) ขยับไปเลนนั้นแล้วทำท่าได้เลย ทำถูกได้คะแนนทันที ไม่ต้องรอถึงเส้น · 60 วินาที</p></div>
+          </div>
+          <div class="chips" id="gPoses"></div>
+          <p class="muted" style="font-size:13px">ได้ EXP ตามจำนวนท่าที่ทำถูก และได้ RP สูงสุด 20 ต่อเกม (กล้องต้องเห็นทั้งตัว) — การตรวจท่าทำที่ CiRA</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+            <button class="btn primary" style="min-height:56px;flex-direction:column;gap:0" onclick="gameLocal()">เล่นบนเครื่องนี้<small style="font-size:12px;opacity:.85">ใช้กล้องของเครื่องนี้</small></button>
+            <button class="btn" style="min-height:56px;flex-direction:column;gap:0" onclick="gamePair()">จอใหญ่ + มือถือเป็นกล้อง<small style="font-size:12px;opacity:.75">แสดงเกมบนคอม/ทีวี สแกน QR ด้วยมือถือ</small></button>
+          </div>
+          <div class="err" id="gErr"></div>
+        </div>
+        <div class="card" id="gBest" style="display:none"></div>
+      </div>
+      <div id="gPair" class="card" style="display:none;flex-direction:column;gap:14px">
+        <h2 style="font-size:20px">ใช้มือถือเป็นกล้อง</h2>
+        <div class="qrbox"><div class="qr" id="gQr"></div>
+          <div style="display:flex;flex-direction:column;gap:8px;min-width:220px;flex:1">
+            <span class="muted" style="font-size:14px">1) สแกน QR ด้วยมือถือ หรือเปิดเว็บนี้ในมือถือ ไปที่เกม แล้วใส่รหัส</span>
+            <span class="paircode" id="gCode">----</span>
+            <span class="muted" style="font-size:14px">2) ตั้งมือถือให้กล้องเห็นทั้งตัว (ถอยห่าง 2–3 เมตร)<br>3) วางมือถือแนวนอน ภาพบนจอใหญ่จะเต็มกว่า<br>4) เกมเริ่มเองเมื่อมือถือเชื่อมต่อและเห็นทั้งตัว</span>
+            <b id="gPairSt" style="font-size:15px">รอมือถือเชื่อมต่อ…</b>
+            <small class="muted" id="gPairLink" style="word-break:break-all"></small>
+          </div></div>
+        <div style="display:flex;gap:10px"><button class="btn" onclick="gameQuit()">ยกเลิก</button></div>
+      </div>
+      <div class="card" id="gJoin" style="display:flex;flex-direction:column;gap:10px">
+        <h2 style="font-size:17px">มีรหัสจากจอใหญ่?</h2>
+        <div style="display:flex;gap:10px"><input id="gJoinCode" inputmode="numeric" maxlength="4" placeholder="รหัส 4 หลัก" style="flex:1"><button class="btn primary" onclick="location.hash='#/cam?pair='+$('#gJoinCode').value.trim()">ใช้มือถือนี้เป็นกล้อง</button></div>
+      </div>
+      <div class="gstage" id="gStage" style="display:none">
+        <div class="gbox" id="gBox">
+          <video id="gVid" muted playsinline></video><img class="gfeed" id="gImg" alt="" style="display:none">
+          <div class="glanes" id="gLanes"><div></div><div></div><div></div></div>
+          <canvas id="gOver"></canvas>
+          <div class="ghit"></div>
+          <div id="gCards"></div>
+          <div class="gyou" id="gYou" style="left:33.33%"><span id="gYouT">คุณ</span></div>
+        </div>
+        <div class="gtop"><button class="iconbtn" onclick="gameQuit()" aria-label="ออกจากเกม"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#14161A" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          <span class="pill2" id="gTime">60</span><span class="grow"></span><span class="pill2" id="gCombo" style="display:none"></span><b id="gScore">0</b>
+          <button class="iconbtn" id="gFlip" onclick="gameFlip()" aria-label="สลับกล้องหน้า/หลัง"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#14161A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3v12H4z"/><path d="M9.5 13.5a2.5 2.5 0 0 0 4.6 1.4M14.5 12.5a2.5 2.5 0 0 0-4.6-1.4"/></svg></button></div>
+        <div class="gmsg" id="gMsg"></div>
+        <div class="gend" id="gEnd" style="display:none"><div class="card" id="gEndCard"></div></div>
+      </div>
+    </section>
+
+    <section class="page" id="p-cam">
+      <div class="gstage" style="display:block">
+        <video id="cVid" muted playsinline style="transform:scaleX(-1)"></video>
+        <div class="gtop"><span class="pill2" id="cCode">รหัส ----</span><span class="grow"></span>
+          <button class="iconbtn" onclick="camFlip()" aria-label="สลับกล้องหน้า/หลัง"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#14161A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3v12H4z"/><path d="M9.5 13.5a2.5 2.5 0 0 0 4.6 1.4M14.5 12.5a2.5 2.5 0 0 0-4.6-1.4"/></svg></button>
+          <button class="iconbtn" onclick="camStop()" aria-label="หยุด"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#14161A" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div class="gmsg" id="cMsg" style="font-size:22px">กำลังเปิดกล้อง…</div>
+      </div>
+    </section>
+
+    <section class="page" id="p-duel">
+      <div class="duelcard">
+        <div><h1>ดวล 1:1</h1><p class="muted" style="margin:6px 0 0;line-height:1.7">แข่งวิดพื้น 60 วินาที อยู่คนละที่ก็แข่งกันได้ นับเฉพาะครั้งที่ทำถูก ถ้าเท่ากันตัดสินด้วยคะแนนท่า ผู้ชนะได้ +30 XP</p></div>
+        <div class="card" id="dOpen" style="display:none;flex-direction:column;gap:8px;border-color:var(--accent)"></div>
+        <div class="card" style="display:flex;flex-direction:column;gap:14px">
+          <span class="muted" style="font-size:13px">เล่นในชื่อ <b style="color:var(--text)" class="meName">-</b> · แรงค์ <b style="color:var(--text)" id="dElo">-</b></span><input type="hidden" id="dName">
+          <small class="muted" style="margin-top:-6px">สร้างห้องก่อน แล้วค่อยเลือกท่าที่จะแข่งในห้อง</small>
+          <button class="btn primary block" onclick="duelCreate()" style="min-height:54px">สร้างห้องใหม่</button>
+          <div class="or">หรือเข้าห้องเพื่อน</div>
+          <div style="display:flex;gap:10px"><input class="f" id="dJoinCode" inputmode="numeric" maxlength="4" placeholder="รหัส 4 หลัก" style="font-family:var(--head);font-size:22px;letter-spacing:4px;text-align:center">
+            <button class="btn" onclick="duelJoin()" style="flex:none">เข้าห้อง</button></div>
+          <div class="err" id="dJoinErr"></div>
+        </div>
+        <div class="card" id="dRecord" style="display:none"></div>
+        <div class="steps" style="padding:0 4px">
+          <div><b>1</b><span>คนหนึ่งกด "สร้างห้องใหม่" แล้วส่งรหัสหรือลิงก์ให้เพื่อน</span></div>
+          <div><b>2</b><span>ทั้งคู่วางกล้องด้านข้าง ให้เห็นทั้งตัว จนขึ้นว่า "เห็นตัวแล้ว"</span></div>
+          <div><b>3</b><span>กด "พร้อม" ทั้งสองคน ระบบจะนับ 3-2-1 พร้อมกันแล้วเริ่มแข่ง</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottom" aria-label="เมนู">
+    <a data-r="train" href="#/train" style="order:2"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#5F6672" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>ฝึก</a>
+    <a data-r="home" href="#/home" style="order:1"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#5F6672" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>หน้าแรก</a>
+    <a data-r="game" href="#/game" style="order:3"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#5F6672" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="12" rx="4"/><path d="M8 11v4M6 13h4"/><circle cx="15.5" cy="12" r=".8"/><circle cx="17.5" cy="14.5" r=".8"/></svg>เกม</a>
+    <a data-r="rank" href="#/rank" style="order:4"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#5F6672" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/></svg>อันดับ</a>
+    <a data-r="me" style="order:5" href="#/me"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#5F6672" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>โปรไฟล์</a>
+  </nav>
+</div>
+
+<div class="modal" id="authModal"><div class="box">
+  <div style="display:flex;align-items:center;gap:10px"><span style="width:38px;height:38px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 12h3M18 12h3M6 8v8M18 8v8M9 10v4M15 10v4M9 12h6"/></svg></span><h2 style="font-size:20px">AI Workout Coach</h2></div>
+  <div class="seg" id="authSeg" style="display:grid;grid-template-columns:1fr 1fr"><button data-m="login" class="on">เข้าสู่ระบบ</button><button data-m="register">สมัครใหม่</button></div>
+  <label class="f">ชื่อผู้เล่น<input class="f" id="aName" list="plist" maxlength="30" autocomplete="username" placeholder="เช่น Surasak"></label>
+  <label class="f">PIN (ตัวเลข 4-6 หลัก)<input class="f" id="aPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="current-password"></label>
+  <label class="f" id="aPin2Wrap" style="display:none">ยืนยัน PIN อีกครั้ง<input class="f" id="aPin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="new-password"></label>
+  <div class="err" id="aErr"></div>
+  <button class="btn primary block" id="aBtn" onclick="doAuth()">เข้าสู่ระบบ</button>
+  <small class="muted" id="aHint" style="line-height:1.6">ยังไม่มีบัญชี? กด "สมัครใหม่" · เคยเล่นก่อนมีระบบนี้ สมัครด้วยชื่อเดิมได้ คะแนนเก่ายังอยู่</small>
+</div></div>
+<div class="modal" id="bodyModal"><div class="box">
+  <h2 style="font-size:20px">ข้อมูลร่างกาย</h2>
+  <p class="muted" style="margin:0;font-size:14px;line-height:1.6">ใช้คำนวณแคลอรี่และ BMI และปรับเกณฑ์ท่าให้เหมาะกับระดับของคุณ</p>
+  <div class="f2"><label class="f">น้ำหนัก (กก.)<input class="f" id="bW" type="number" inputmode="decimal" min="20" max="300" step="0.1"></label>
+    <label class="f">ส่วนสูง (ซม.)<input class="f" id="bH" type="number" inputmode="decimal" min="100" max="250"></label></div>
+  <div class="f2"><label class="f">อายุ (ปี)<input class="f" id="bA" type="number" inputmode="numeric" min="7" max="100"></label>
+    <label class="f">เพศ<select class="f" id="bS"><option value="">ไม่ระบุ</option><option value="male">ชาย</option><option value="female">หญิง</option><option value="other">อื่น ๆ</option></select></label></div>
+  <span class="muted" style="font-size:13px">ระดับการออกกำลังกาย</span>
+  <div class="lv" id="lvSeg"><button data-lv="beginner">มือใหม่</button><button data-lv="intermediate">ปานกลาง</button><button data-lv="advanced">คล่องแล้ว</button></div>
+  <small class="muted" id="lvHint" style="line-height:1.6"></small>
+  <div class="err" id="bErr"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn" onclick="closeBody()">ไว้ทีหลัง</button><button class="btn primary" onclick="saveBody()">บันทึก</button></div>
+</div></div>
+<div class="modal" id="msgModal"><div class="box" id="msgBox"></div></div>
+<div id="toast" role="status"></div>
+
+<script src="/static/qrcode.min.js"></script>
+<script>
+// ================= ทั่วไป =================
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = n => Number(n || 0).toLocaleString("th-TH");
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const store = {get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } },
+               set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }};
+let me = store.get("coach_name", "");
+let data = null, streams = {cira_online: false, streams: [], max: 2};
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("show"); clearTimeout(el._h); el._h = setTimeout(() => el.classList.remove("show"), 2600); }
+
+// ================= นำทาง =================
+const PAGES = ["home", "train", "muscle", "setup", "practice", "result", "rank", "me", "duel", "game", "cam"];
+function route() {
+  let r = (location.hash.replace(/^#\/?/, "") || "home").split("?")[0];
+  if (!PAGES.includes(r)) r = "home";
+  if (r === "practice" && !W.running) r = "setup";
+  if (G.running && r !== "game") { toast("กด ✕ เพื่อออกจากเกมก่อน"); history.replaceState(null, "", "#/game"); return; }
+  if (CAM.on && r !== "cam") camStop(true);
+  if (W.running && r !== "practice") { toast(W.mode === "duel" ? "กด ออกจากห้อง ก่อน" : "กด จบเซต ก่อน"); history.replaceState(null, "", "#/practice"); r = "practice"; }
+  PAGES.forEach(p => $("#p-" + p).classList.toggle("on", p === r));
+  document.querySelectorAll("[data-r]").forEach(a => a.classList.toggle("on", a.dataset.r === r || (a.dataset.r === "train" && r === "setup")));
+  document.body.classList.toggle("full", r === "practice" || r === "cam" || (r === "game" && G.running));
+  if (r === "game") prepGame();
+  if (r === "cam") camStart(new URLSearchParams(location.hash.split("?")[1] || "").get("pair"));
+  if (r === "setup") { prepSetup(); renderSetupEx(); }
+  if (r === "train") renderTrain();
+  if (r === "duel") prepDuel();
+  if (["home", "rank", "me"].includes(r)) load();
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", route);
+function go(r) { if (location.hash === "#/" + r) route(); else location.hash = "#/" + r; }
+
+// ================= ชื่อผู้เล่น =================
+// ---------- บัญชีผู้ใช้ (ชื่อ + PIN) ----------
+let token = store.get("coach_token", ""), user = null, authMode = "login", lvSel = "beginner";
+const LV_HINT = {beginner: "มือใหม่: เกณฑ์ความลึกหลวมขึ้นเล็กน้อย เหมาะกับคนเพิ่งเริ่ม",
+  intermediate: "ปานกลาง: เกณฑ์มาตรฐาน (ต้นขาขนานพื้น / อกเกือบถึงพื้น)", advanced: "คล่องแล้ว: ต้องลงลึกกว่ามาตรฐาน"};
+function showAuth(msg) {
+  $("#aName").value = store.get("coach_name", ""); $("#aPin").value = $("#aPin2").value = "";
+  $("#aErr").textContent = msg || ""; $("#aErr").style.display = msg ? "block" : "none";
+  $("#authModal").style.display = "flex";
+}
+document.querySelectorAll("#authSeg button").forEach(b => b.onclick = () => {
+  authMode = b.dataset.m; document.querySelectorAll("#authSeg button").forEach(x => x.classList.toggle("on", x === b));
+  $("#aPin2Wrap").style.display = authMode === "register" ? "" : "none";
+  $("#aBtn").textContent = authMode === "register" ? "สมัครและเริ่มใช้งาน" : "เข้าสู่ระบบ";
+  $("#aPin").autocomplete = authMode === "register" ? "new-password" : "current-password";
+});
+$("#aPin").addEventListener("keydown", e => { if (e.key === "Enter" && authMode === "login") doAuth(); });
+async function doAuth() {
+  const name = $("#aName").value.trim(), pin = $("#aPin").value.trim(), err = t => { $("#aErr").textContent = t; $("#aErr").style.display = "block"; };
+  if (name.length < 2) return err("ใส่ชื่ออย่างน้อย 2 ตัวอักษร");
+  if (!/^\d{4,6}$/.test(pin)) return err("PIN ต้องเป็นตัวเลข 4-6 หลัก");
+  if (authMode === "register" && pin !== $("#aPin2").value.trim()) return err("PIN สองช่องไม่ตรงกัน");
+  $("#aBtn").disabled = true;
+  const j = await api(`/api/auth/${authMode}`, {name, pin});
+  $("#aBtn").disabled = false;
+  if (j.ok === false) return err(j.error);
+  token = j.token; store.set("coach_token", token); user = j.user; me = user.name; store.set("coach_name", me);
+  $("#authModal").style.display = "none"; afterLogin();
+  if (!user.complete && !store.get("coach_body_asked_" + me, "")) openBody();     // ถามครั้งเดียวต่อเครื่อง
+  toast(authMode === "register" ? `ยินดีต้อนรับ ${me}!` : `สวัสดี ${me}`);
+}
+async function initAuth() {
+  if (/^#\/cam/.test(location.hash)) return;     // มือถือที่เป็นกล้องให้จอใหญ่ ไม่ต้องล็อกอิน
+  if (!token) { showAuth(); return; }
+  const j = await api("/api/me");
+  if (j.ok === false) { if (j.auth) { token = ""; store.set("coach_token", ""); showAuth(); } return; }
+  user = j.user; me = user.name; store.set("coach_name", me); afterLogin();
+}
+function afterLogin() {
+  document.querySelectorAll(".meName").forEach(el => el.textContent = me);
+  $("#sName").value = $("#dName").value = me; load();
+}
+async function logout() {
+  await api("/api/auth/logout", {}); token = ""; store.set("coach_token", ""); user = null; me = ""; data = null;
+  go("home"); showAuth();
+}
+function openBody() {
+  const u = user || {};
+  $("#bW").value = u.weight || ""; $("#bH").value = u.height || ""; $("#bA").value = u.age || ""; $("#bS").value = u.sex || "";
+  setLv(u.level || "beginner"); $("#bErr").style.display = "none"; $("#bodyModal").style.display = "flex";
+}
+function setLv(lv) { lvSel = lv; document.querySelectorAll("#lvSeg button").forEach(b => b.classList.toggle("on", b.dataset.lv === lv)); $("#lvHint").textContent = LV_HINT[lv]; }
+document.querySelectorAll("#lvSeg button").forEach(b => b.onclick = () => setLv(b.dataset.lv));
+function closeBody() { $("#bodyModal").style.display = "none"; store.set("coach_body_asked_" + me, "1"); }
+async function saveBody() {
+  const w = parseFloat($("#bW").value), h = parseFloat($("#bH").value);
+  if ($("#bW").value && !(w >= 20 && w <= 300)) { $("#bErr").textContent = "น้ำหนักต้องอยู่ระหว่าง 20-300 กก."; $("#bErr").style.display = "block"; return; }
+  if ($("#bH").value && !(h >= 100 && h <= 250)) { $("#bErr").textContent = "ส่วนสูงต้องอยู่ระหว่าง 100-250 ซม."; $("#bErr").style.display = "block"; return; }
+  const j = await api("/api/me", {weight: $("#bW").value, height: $("#bH").value, age: $("#bA").value, sex: $("#bS").value, level: lvSel});
+  if (j.ok === false) { $("#bErr").textContent = j.error; $("#bErr").style.display = "block"; return; }
+  user = j.user; closeBody(); toast("บันทึกข้อมูลแล้ว"); load();
+}
+
+// ================= ดึงข้อมูล =================
+async function load() {
+  try {
+    data = await (await fetch("/api/summary" + (me ? "?player=" + encodeURIComponent(me) : ""), {cache: "no-store"})).json();
+    if (me && data.profile && data.profile.player !== me) data.profile = null;
+    renderHome(); renderRank(); renderMe();
+    $("#plist").innerHTML = data.players.map(p => `<option value="${esc(p)}">`).join("");
+  } catch (e) {}
+}
+async function loadStreams() {
+  try { streams = await (await fetch("/api/streams", {cache: "no-store"})).json(); }
+  catch (e) { streams = {cira_online: false, streams: [], max: 2, offline: true}; }
+  const on = streams.cira_online;
+  $("#ciraDot").classList.toggle("on", on);
+  $("#ciraText").textContent = streams.offline ? "ต่อ HUB ไม่ได้" : on ? "CiRA CORE พร้อม" : "CiRA CORE ยังไม่ทำงาน";
+  $("#ciraSub").textContent = on ? `ประมวลผลภาพ · เล่นพร้อมกันได้ ${streams.max} คน` : "กด Run ใน CiRA CORE";
+  $("#pubLink").innerHTML = streams.public_url && location.hostname === "127.0.0.1"
+    ? `ลิงก์ให้เพื่อน: <a href="#" onclick="navigator.clipboard.writeText('${esc(streams.public_url)}');toast('คัดลอกลิงก์แล้ว');return false" style="color:var(--accent)">คัดลอก</a>` : "";
+  const busy = streams.streams.filter(s => s.status !== "done");
+  $("#sStatus").textContent = `${on ? "● CiRA พร้อม" : "● CiRA ยังไม่ทำงาน (กด Run ใน CiRA)"} · กำลังเล่น ${busy.length}/${streams.max} คน`;
+}
+
+// ================= รูปร่างกาย (แผนที่กล้ามเนื้อ) =================
+const OFF = "#E3E5EA", NEUTRAL = "#EEF0F3";
+function bodySVG(f, w = 200) {
+  const h = Math.round(w * 390 / 220);
+  return `<svg width="${w}" height="${h}" viewBox="0 0 220 390" role="img" aria-label="แผนที่กล้ามเนื้อ">
+    <circle cx="110" cy="30" r="20" fill="${NEUTRAL}"/><rect x="100" y="50" width="20" height="16" rx="6" fill="${NEUTRAL}"/>
+    <ellipse cx="62" cy="88" rx="20" ry="16" fill="${f.shoulders}"/><ellipse cx="158" cy="88" rx="20" ry="16" fill="${f.shoulders}"/>
+    <rect x="70" y="72" width="38" height="46" rx="16" fill="${f.chest}"/><rect x="112" y="72" width="38" height="46" rx="16" fill="${f.chest}"/>
+    <rect x="84" y="124" width="52" height="74" rx="18" fill="${f.abs}"/>
+    <rect x="36" y="106" width="22" height="66" rx="11" fill="${f.arms}"/><rect x="162" y="106" width="22" height="66" rx="11" fill="${f.arms}"/>
+    <rect x="30" y="178" width="20" height="62" rx="10" fill="${NEUTRAL}"/><rect x="170" y="178" width="20" height="62" rx="10" fill="${NEUTRAL}"/>
+    <rect x="80" y="204" width="60" height="28" rx="14" fill="${NEUTRAL}"/>
+    <rect x="78" y="236" width="30" height="88" rx="15" fill="${f.legs}"/><rect x="112" y="236" width="30" height="88" rx="15" fill="${f.legs}"/>
+    <rect x="80" y="330" width="26" height="54" rx="13" fill="${NEUTRAL}"/><rect x="114" y="330" width="26" height="54" rx="13" fill="${NEUTRAL}"/></svg>`;
+}
+const VIEWS = {
+  front: [{id: "chest", label: "อก", region: "chest"}, {id: "shoulders", label: "ไหล่หน้า", region: "shoulders"},
+          {id: "arms", label: "ต้นแขน", region: "arms"}, {id: "abs", label: "หน้าท้อง", region: "abs"}, {id: "quads", label: "ต้นขาหน้า", region: "legs"}],
+  back:  [{id: "back", label: "หลัง", region: "chest"}, {id: "rear", label: "ไหล่หลัง", region: "shoulders"},
+          {id: "triceps", label: "แขนหลัง", region: "arms"}, {id: "lower", label: "หลังล่าง", region: "abs"}, {id: "hams", label: "ต้นขาหลัง", region: "legs"}]
+};
+const PUSHUP = {name: "วิดพื้น", sub: "อก · แขนหลัง · ไหล่หน้า", ai: true, ex: "pushup"};
+const SQUAT = {name: "สควอท", sub: "ต้นขาหน้า · ก้น · ต้นขาหลัง · มีบทเรียน", ai: true, ex: "squat"};
+const soon = (name, sub) => ({name, sub, ai: false});
+const LIB = {
+  chest: [PUSHUP, soon("วิดพื้นมือกว้าง", "เน้นอกด้านนอก")], shoulders: [PUSHUP, soon("ไพค์พุชอัพ", "เน้นไหล่")],
+  arms: [soon("ดิปส์เก้าอี้", "ต้นแขน")], triceps: [PUSHUP, soon("ดิปส์เก้าอี้", "แขนหลัง")],
+  abs: [soon("แพลงก์", "แกนกลางลำตัว"), soon("ครันช์", "หน้าท้อง")], quads: [SQUAT, soon("ลันจ์", "ต้นขา")],
+  back: [soon("ซูเปอร์แมน", "หลัง")], rear: [soon("ท่าใหม่", "ไหล่หลัง")], lower: [soon("ท่าใหม่", "หลังล่าง")],
+  hams: [SQUAT, soon("กลูทบริดจ์", "ต้นขาหลัง · ก้น")]
+};
+let mView = "front", mSel = "chest";
+function setView(v) { mView = v; mSel = v === "front" ? "chest" : "triceps"; renderMuscle(); }
+function pickMuscle(id) { mSel = id; renderMuscle(); }
+function renderMuscle() {
+  $("#vFront").classList.toggle("on", mView === "front"); $("#vBack").classList.toggle("on", mView === "back");
+  const list = VIEWS[mView], sel = list.find(m => m.id === mSel) || list[0];
+  const f = {chest: OFF, shoulders: OFF, arms: OFF, abs: OFF, legs: OFF}; f[sel.region] = "var(--accent)";
+  $("#mBody").innerHTML = bodySVG(f, 210);
+  $("#mChips").innerHTML = list.map(m => `<button class="${m.id === sel.id ? "on" : ""}" onclick="pickMuscle('${m.id}')">${m.label}</button>`).join("");
+  $("#mFor").textContent = "ท่าสำหรับ" + sel.label;
+  $("#mList").innerHTML = (LIB[sel.id] || []).map(e => e.ai
+    ? `<a class="ex" href="#/setup" onclick="chooseEx('${e.ex}')"><span class="grow"><span class="t">${e.name}</span><br><small class="muted">${e.sub}</small></span><span class="ai">AI ตรวจท่า</span><span class="btn primary" style="min-height:40px;padding:0 14px">เริ่ม</span></a>`
+    : `<div class="ex soon-box"><span class="grow"><span class="t">${e.name}</span><br><small>${e.sub}</small></span><span class="soon">เร็ว ๆ นี้</span></div>`).join("");
+}
+
+// ================= หน้าแรก =================
+function ring(svg, pct, label, size = 76, stroke = 8, ink = "#14161A") {
+  const r = (size - stroke) / 2 - 2, c = 2 * Math.PI * r, cx = size / 2;
+  svg.innerHTML = `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="#EEF0F3" stroke-width="${stroke}"/>
+    <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="var(--accent)" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${c * Math.min(1, pct)} ${c}" opacity="${pct > 0 ? 1 : 0}" transform="rotate(-90 ${cx} ${cx})"/>
+    ${label !== undefined && label !== "" ? `<text x="${cx}" y="${cx + size * .1}" text-anchor="middle" font-family="Kanit, 'IBM Plex Sans Thai', 'Leelawadee UI', sans-serif" font-weight="500" font-size="${size * .3}" fill="${ink}">${label}</text>` : ""}`;
+}
+function greet() { const h = new Date().getHours(); return h < 12 ? "สวัสดีตอนเช้า" : h < 17 ? "สวัสดีตอนบ่าย" : "สวัสดีตอนเย็น"; }
+// รูปโปรไฟล์ (ถ้าไม่มีใช้ตัวอักษรแรกของชื่อ)
+function avatarOf(name) { return (data && data.avatars && data.avatars[name]) || (user && user.name === name && user.avatar) || null; }
+function avt(name, size = 36) {
+  const url = avatarOf(name);
+  return `<span class="avt" style="width:${size}px;height:${size}px;font-size:${Math.round(size * .42)}px">${esc(String(name || "?").slice(0, 1).toUpperCase())}${url ? `<img src="${esc(url)}" alt="" onerror="this.remove()">` : ""}</span>`;
+}
+const lvTag = lv => `<span class="lvt">Lv.${lv}</span>`;
+// อันดับการฝึก: เรียงตาม EXP แต่ไม่โชว์ตัวเลข EXP ของคนอื่น (โชว์แค่เลเวล)
+function boardRows(list, n) {
+  if (!list.length) return `<div class="empty">ยังไม่มีใครฝึกในช่วงนี้</div>`;
+  return list.slice(0, n).map((a, i) => `<div class="row ${a.me ? "me" : ""}"><span class="pos">${i + 1}</span>${avt(a.player, 32)}
+    <span class="grow">${esc(a.player)}${a.me ? " (คุณ)" : ""}</span>${a.me && a.xp != null ? `<small class="muted">${fmt(a.xp)} EXP</small>` : ""}${lvTag(a.level)}</div>`).join("");
+}
+function rankRows(list, n) {
+  if (!list.length) return `<div class="empty">ยังไม่มีใครดวลหรือเล่นเกม</div>`;
+  return list.slice(0, n).map((a, i) => `<div class="row ${a.me ? "me" : ""}"><span class="pos">${i + 1}</span>${avt(a.player, 32)}
+    <span class="grow">${esc(a.player)}${a.me ? " (คุณ)" : ""}</span>${a.me ? `<small class="muted">${fmt(a.rp)} RP</small>` : ""}
+    <span class="chip" style="border-color:${a.rank.color}">${rankImg(a.rank.name, 18)} ${esc(a.rank.name)}</span></div>`).join("");
+}
+function meBars(p) {   // แถบเลเวล + แถบแรงค์ ของตัวเอง
+  const L = p.level, R = p.rank;
+  return `<div class="bars2"><div><div style="display:flex;justify-content:space-between;font-size:13px"><span>${lvTag(L.level)} <b>${fmt(p.xp)}</b> EXP</span>
+      <span class="muted">อีก ${fmt(L.next_xp - p.xp)} EXP ถึง Lv.${L.level + 1}</span></div><div class="xbar" style="margin-top:6px"><i style="width:${Math.round(L.progress * 100)}%;background:var(--accent)"></i></div></div>
+    <div><div style="display:flex;justify-content:space-between;font-size:13px"><span>${rankImg(R.name, 20)} <b>${esc(R.name)}</b> · ${fmt(p.rp)} RP</span>
+      <span class="muted">${R.next ? `อีก ${fmt(R.next_xp - p.rp)} RP ถึง ${esc(R.next)}` : "แรงค์สูงสุด"}</span></div><div class="xbar" style="margin-top:6px"><i style="width:${Math.round(R.progress * 100)}%;background:${R.color}"></i></div></div></div>`;
+}
+function renderHome() {
+  if (!data) return;
+  const p = data.profile;
+  $("#greet").textContent = greet(); $("#hName").textContent = me || "ตั้งชื่อของคุณ"; $("#hAvt").innerHTML = me ? avt(me, 48) : "";
+  $("#hRank").innerHTML = p ? `${lvTag(p.level.level)} ${rankImg(p.rank.name)} ${p.rank.name}` : `${lvTag(1)} ${rankImg("Bronze")} Bronze`;
+  $("#hRank").style.borderColor = p ? p.rank.color : "";
+  const goal = p ? p.daily_goal : (data.rules?.daily_goal || 30), today = p ? p.today_good : 0;
+  ring($("#goalRing"), today / goal, today, 76, 8);
+  $("#kGoal").textContent = `${today} / ${goal} ครั้ง`;
+  $("#kGoalSub").textContent = today >= goal ? "ถึงเป้าแล้ว" : `อีก ${goal - today} ครั้ง`;
+  const st = p ? p.streak : 0;
+  $("#kStreak").textContent = `${st} วัน`;
+  $("#kStreakBars").innerHTML = Array.from({length: 7}, (_, i) => `<span style="flex:1;height:6px;border-radius:3px;background:${i < Math.min(st, 7) ? "var(--accent)" : "#EEF0F3"}"></span>`).join("");
+  $("#kForm").textContent = p && p.form_score_7d != null ? p.form_score_7d : "-";
+  const d = p && p.form_score_7d != null && p.form_score_prev != null ? p.form_score_7d - p.form_score_prev : null;
+  $("#kFormSub").textContent = d == null ? "ฝึกเพื่อดูพัฒนาการ" : d === 0 ? "เท่ากับสัปดาห์ก่อน" : d > 0 ? `ดีขึ้น ${d} จากสัปดาห์ก่อน` : `ลดลง ${-d} จากสัปดาห์ก่อน`;
+  $("#kFormSub").style.color = d != null && d > 0 ? "var(--good)" : "";
+  if (p) {
+    $("#kNext").textContent = `Lv.${p.level.level} · อีก ${fmt(p.level.next_xp - p.xp)} EXP ถึง Lv.${p.level.level + 1}`;
+    $("#kNextBar").style.width = Math.round(p.level.progress * 100) + "%"; $("#kNextBar").style.background = "var(--accent)";
+    $("#kPos").textContent = `อันดับการฝึก #${p.position || "-"} · แรงค์ ${p.rank.name} #${p.rank_position}`;
+  } else { $("#kNext").textContent = "ยังไม่มีคะแนน"; $("#kPos").textContent = "เริ่มฝึกเซตแรกเลย"; }
+  // แผนที่ความร้อน
+  const mw = p ? p.muscles_week : {}, mx = Math.max(1, ...Object.values(mw));
+  const shade = v => !v ? OFF : v / mx > .66 ? "var(--accent)" : v / mx > .33 ? "var(--accent-mid)" : "var(--accent-pale)";
+  $("#heatBody").innerHTML = bodySVG({chest: shade(mw.chest), shoulders: shade(mw.shoulders), arms: shade(mw.triceps),
+                                      abs: shade(mw.abs), legs: shade(mw.quads)}, 130);
+  const names = {chest: "อก", triceps: "แขนหลัง", shoulders: "ไหล่หน้า", abs: "หน้าท้อง", quads: "ต้นขาหน้า", glutes: "ก้น", hams: "ต้นขาหลัง"};
+  const items = Object.keys(names).map(k => `<span><i style="background:${shade(mw[k])}"></i>${names[k]} · ${mw[k] ? fmt(mw[k]) + " ครั้ง" : "ยังไม่ได้ฝึก"}</span>`);
+  $("#heatLegend").innerHTML = items.join("") + (!mw.quads ? `<a class="tip" style="margin-top:4px" href="#/setup" onclick="chooseEx('squat')">ยังไม่ได้ฝึกขา ลองบทเรียนสควอทเพื่อความสมดุล →</a>` : "");
+  $("#homeBoard").innerHTML = boardRows(data.boards.week, 5);
+}
+
+// ================= อันดับ =================
+let period = "week";
+document.querySelectorAll("#period button").forEach(b => b.onclick = () => {
+  period = b.dataset.p; document.querySelectorAll("#period button").forEach(x => x.classList.toggle("on", x === b)); renderRank();
+});
+function ago(ts) {
+  const d = (new Date(data.now) - new Date(ts)) / 1000;
+  return d < 60 ? "เมื่อสักครู่" : d < 3600 ? Math.floor(d / 60) + " นาทีที่แล้ว" : d < 86400 ? Math.floor(d / 3600) + " ชั่วโมงที่แล้ว" : Math.floor(d / 86400) + " วันที่แล้ว";
+}
+let rankTab = "train";
+document.querySelectorAll("#rankTabs button").forEach(b => b.onclick = () => {
+  rankTab = b.dataset.t; document.querySelectorAll("#rankTabs button").forEach(x => x.classList.toggle("on", x === b)); renderRank();
+});
+function renderRank() {
+  if (!data) return;
+  const p = data.profile;
+  $("#rankMe").innerHTML = p ? `<div class="mycard">${avt(p.player, 56)}<div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><b style="font-family:var(--head);font-size:18px">${esc(p.player)}</b>
+        <span class="muted" style="font-size:13px">อันดับการฝึก #${p.position || "-"} · อันดับแรงค์ #${p.rank_position} จาก ${p.players} คน</span></div>${meBars(p)}</div></div>`
+    : `<div class="empty">ยังไม่มีคะแนน เริ่มฝึกเซตแรกได้เลย</div>`;
+  $("#period").style.display = rankTab === "train" ? "" : "none";
+  $("#rankNote").textContent = rankTab === "train" ? "เรียงตาม EXP จากการฝึก (เห็นแค่เลเวลของคนอื่น)" :
+    `แต้มแรงค์ได้จากดวล (ชนะ +${data.rules.rp.win} เสมอ +${data.rules.rp.draw} แพ้ ${data.rules.rp.loss}) และเกม (สูงสุด +${data.rules.rp.game_max})`;
+  $("#rankList").innerHTML = rankTab === "train" ? boardRows(data.boards[period], 50) : rankRows(data.rank_board, 50);
+  $("#feedList").innerHTML = data.feed.length ? data.feed.slice(0, 8).map(f => `<div class="row"><span class="grow">${esc(f.player)}<br><small class="muted">${esc(f.exercise)} ${f.good} ครั้ง · ${ago(f.ts)}</small></span>
+    </div>`).join("") : `<div class="empty">ยังไม่มีเซตที่บันทึก</div>`;
+}
+
+// ================= โปรไฟล์ =================
+const BADGE_ICON = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="6"/><path d="M8.5 14l-1.5 7 5-3 5 3-1.5-7"/></svg>';
+function bodyCard(p) {
+  const u = user || {};
+  const SEX = {male: "ชาย", female: "หญิง", other: "อื่น ๆ"};
+  const item = (k, v) => `<div><small class="muted" style="font-size:12px">${k}</small><br><b class="num" style="font-size:18px;font-weight:500">${v}</b></div>`;
+  return `<div class="card" style="display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:17px">ข้อมูลร่างกาย</h2>
+      <div style="display:flex;gap:8px"><button class="btn" style="min-height:38px" onclick="openBody()">แก้ไข</button><button class="btn" style="min-height:38px" onclick="logout()">ออกจากระบบ</button></div></div>
+    ${u.complete ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px">
+      ${item("น้ำหนัก", u.weight + " กก.")}${item("ส่วนสูง", u.height + " ซม.")}${item("BMI", u.bmi + ` <small style="font-size:12px" class="muted">${u.bmi_cat}</small>`)}
+      ${item("อายุ", u.age ? u.age + " ปี" : "-")}${item("เพศ", SEX[u.sex] || "-")}${item("ระดับ", u.level_name)}
+      ${p ? item("แคลอรี่ 7 วัน", fmt(p.kcal_7d) + " kcal") + item("แคลอรี่ทั้งหมด", fmt(p.kcal_total) + " kcal") : ""}</div>
+      <small class="muted">BMI ใช้เกณฑ์คนเอเชีย · แคลอรี่คำนวณจากค่า MET x น้ำหนัก x เวลาที่ออกแรง (ค่าประมาณ)</small>`
+    : `<a class="tip" href="javascript:openBody()">ยังไม่ได้ใส่น้ำหนัก/ส่วนสูง แตะเพื่อกรอก (ใช้คำนวณแคลอรี่และ BMI)</a>`}</div>`;
+}
+function renderMe() {
+  if (!data) return;
+  const p = data.profile;
+  if (!p) { $("#meBox").innerHTML = `<div class="head"><div><span class="muted">โปรไฟล์</span><h1>${esc(me || "-")}</h1></div></div>${bodyCard(null)}<div class="card empty">ยังไม่มีเซตที่บันทึก<br><a class="btn primary" href="#/setup" style="margin-top:12px">เริ่มฝึกเซตแรก</a></div>`; return; }
+  const maxDay = Math.max(1, ...p.days.map(d => d.good));
+  const bars = p.days.map((d, i) => { const h = Math.round(90 * d.good / maxDay), x = i * 26 + 4;
+    return `<rect x="${x}" y="${100 - h}" width="18" height="${Math.max(h, 2)}" rx="4" fill="${d.good >= p.daily_goal ? "#5B3DF5" : d.good ? "#9B86FF" : "#EEF0F3"}"/>
+      <text x="${x + 9}" y="116" font-size="9" fill="#5F6672" text-anchor="middle">${d.day.slice(8)}</text>`; }).join("");
+  $("#meBox").innerHTML = `
+    <div class="head"><div style="display:flex;align-items:center;gap:14px"><label class="avt avbig" title="เปลี่ยนรูปโปรไฟล์">${esc(p.player.slice(0, 1).toUpperCase())}${avatarOf(p.player) ? `<img src="${esc(avatarOf(p.player))}" alt="">` : ""}<input type="file" accept="image/*" class="sr" onchange="uploadAvatar(this.files[0])"></label>
+      <div><span class="muted">โปรไฟล์</span><h1>${esc(p.player)}</h1></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${lvTag(p.level.level)}<span class="chip" style="border-color:${p.rank.color}">${rankImg(p.rank.name, 22)} ${esc(p.rank.name)} · อันดับแรงค์ #${p.rank_position}</span><span class="chip">ดวลชนะ ${p.duels.win}/${p.duels.played}</span></div></div>
+    ${bodyCard(p)}
+    <div class="card">${meBars(p)}</div>
+    <div class="kpis">
+      <div class="card kpi"><span class="muted" style="font-size:13px">ทำถูกทั้งหมด</span><b>${fmt(p.total_good)} ครั้ง</b></div>
+      <div class="card kpi"><span class="muted" style="font-size:13px">คะแนนท่าเฉลี่ย 7 วัน</span><b>${p.form_score_7d ?? "-"}</b></div>
+      <div class="card kpi"><span class="muted" style="font-size:13px">TUT เฉลี่ย</span><b>${p.avg_tut} วิ</b></div>
+      <div class="card kpi"><span class="muted" style="font-size:13px">สถิติสูงสุดใน 1 เซต</span><b>${p.best_set} ครั้ง</b></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h2 style="font-size:17px;margin-bottom:8px">14 วันล่าสุด</h2><svg viewBox="0 0 368 120" width="100%" role="img" aria-label="กราฟ 14 วัน">${bars}</svg></div>
+      <div class="card"><h2 style="font-size:17px;margin-bottom:10px">เหรียญ</h2><div class="badges">${p.badges.map(b => `<div class="badge ${b.got ? "" : "off"}" style="color:${b.got ? "#5B3DF5" : "#5F6672"}"><span style="position:relative;display:block;width:40px;height:40px;margin:0 auto 4px">${BADGE_ICON.replace('<svg', '<svg style="position:absolute;inset:7px"')}<img src="/static/img/badge/${b.key}.png" alt="" onerror="this.remove()" style="position:absolute;inset:0;width:40px;height:40px;object-fit:contain;background:var(--card)"></span><span style="color:#3D434C">${esc(b.name)}</span></div>`).join("")}</div></div>
+    </div>
+    <div class="card"><h2 style="font-size:17px;margin-bottom:6px">เซตล่าสุด</h2>${p.recent.length ? p.recent.map(s => `<div class="row"><span class="grow">${esc(s.exercise)} ${s.good} ครั้ง${s.bad ? ` <small style="color:var(--bad)">· ไม่ผ่าน ${s.bad}</small>` : ""}<br>
+      <small class="muted">${ago(s.ts)} · TUT ${s.avg_tut} วิ${s.form_score ? " · คะแนนท่า " + s.form_score : ""}</small></span><b class="num" style="color:var(--accent);font-weight:500">+${s.xp} EXP</b></div>`).join("") : `<div class="empty">ยังไม่มีเซต</div>`}</div>`;
+}
+
+// รูปโปรไฟล์: ครอปเป็นสี่เหลี่ยม 256x256 ในเบราว์เซอร์ แล้วส่งเป็น JPEG ให้ HUB เก็บ
+async function uploadAvatar(file) {
+  if (!file) return;
+  try {
+    const img = await createImageBitmap(file), n = Math.min(img.width, img.height), c = document.createElement("canvas");
+    c.width = c.height = 256;
+    c.getContext("2d").drawImage(img, (img.width - n) / 2, (img.height - n) / 2, n, n, 0, 0, 256, 256);
+    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+    const j = await (await fetch("/api/me/avatar", {method: "POST", body: blob, headers: {"X-Token": token, "Content-Type": "image/jpeg"}})).json();
+    if (j.ok === false) { toast(j.error); return; }
+    user = j.user; toast("เปลี่ยนรูปโปรไฟล์แล้ว"); load();
+  } catch (e) { toast("อ่านรูปไม่ได้: " + e.message); }
+}
+
+// ================= ตั้งกล้อง =================
+let goal = Number(store.get("coach_goal", 10)), facing = store.get("coach_facing", "environment");
+function setGoal(d) { goal = Math.max(5, Math.min(50, goal + d)); store.set("coach_goal", goal); $("#sGoal").textContent = goal; }
+async function listCameras() {
+  try {
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput"), saved = store.get("coach_cam", "");
+    $("#sCam").innerHTML = `<option value="">กล้องเริ่มต้น (${facing === "user" ? "หน้า" : "หลัง"})</option>` +
+      devs.map((d, i) => `<option value="${esc(d.deviceId)}" ${d.deviceId === saved ? "selected" : ""}>${esc(d.label || "กล้อง " + (i + 1))}</option>`).join("");
+  } catch (e) {}
+}
+function prepSetup() {
+  hrNote();
+  $("#sName").value = me; $("#sGoal").textContent = goal; $("#sErr").style.display = "none";
+  if (!window.isSecureContext) showErr("browser ไม่ให้เปิดกล้องผ่านลิงก์ http ให้ใช้ลิงก์ https (ลิงก์ trycloudflare หรือ https://...:5443)");
+  listCameras(); loadStreams();
+}
+function showErr(t) { $("#sErr").textContent = t; $("#sErr").style.display = t ? "block" : "none"; }
+$("#sFlip").onclick = () => { facing = facing === "user" ? "environment" : "user"; store.set("coach_facing", facing); $("#sCam").value = ""; store.set("coach_cam", ""); listCameras(); toast(facing === "user" ? "ใช้กล้องหน้า" : "ใช้กล้องหลัง"); };
+
+// ================= ฝึกท่า (ส่งภาพให้ CiRA) =================
+const SKEL = [["left_shoulder","right_shoulder"],["left_shoulder","left_elbow"],["left_elbow","left_wrist"],["right_shoulder","right_elbow"],
+  ["right_elbow","right_wrist"],["left_shoulder","left_hip"],["right_shoulder","right_hip"],["left_hip","right_hip"],["left_hip","left_knee"],
+  ["left_knee","left_ankle"],["right_hip","right_knee"],["right_knee","right_ankle"]];
+const ISSUE_TH = {shallow: "ลงให้ลึกกว่านี้", body: "เกร็งลำตัวให้ตรง", fast: "ช้าลงหน่อย", lean: "ยกอกขึ้น หลังอย่าโน้ม", heels: "กดส้นเท้าติดพื้น",
+  knees: "ดันเข่าออก อย่าให้บิดเข้า", narrow: "กางขาให้กว้างเท่าไหล่", wide: "ยืนแคบลงนิด"};
+const JOINT_TH = {shoulder: "ไหล่", hip: "สะโพก", knee: "เข่า", ankle: "ข้อเท้า"};
+const CIRA_VER = 7;
+const ciraOld = r => !(r.ver >= CIRA_VER);
+const OLD_MSG = "CiRA ยังใช้โค้ดเก่าอยู่ — ใน CiRA กด Stop แล้วกด Run ใหม่";
+function seeMsg(m) {
+  const miss = (m.missing || []).map(j => JOINT_TH[j] || j);
+  if (!miss.length) return "ยังเห็นตัวไม่ครบ ถอยออกไปอีกนิด";
+  const fix = (m.missing || []).includes("ankle") ? "ปรับกล้องให้เห็นถึงเท้า" : (m.missing || []).includes("shoulder") ? "ปรับกล้องให้เห็นถึงหัวไหล่" : "ถอยออกไปอีกนิด";
+  return `กล้องยังไม่เห็น${miss.join(" ")} — ${fix}`;
+}
+const FPS = 12, CAP_W = 640;
+const W = {mode: "practice", running: false, paused: false, sid: null, stream: null, cap: document.createElement("canvas"), seen: 0, lastSeq: 0, result: null,
+           target: null, disp: {}, side: null, fpsCount: 0, fps: 0, final: null};
+let thaiVoice = null;
+function pickVoice() { try { thaiVoice = speechSynthesis.getVoices().find(v => /^th/i.test(v.lang)) || null; } catch (e) {} }
+if ("speechSynthesis" in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function say(t) { if (!$("#voiceOn").checked || !("speechSynthesis" in window)) return;
+  const u = new SpeechSynthesisUtterance(t); u.lang = "th-TH"; if (thaiVoice) u.voice = thaiVoice; u.rate = 1.1; speechSynthesis.speak(u); }
+function cue(t, good) { const c = $("#cue"); c.textContent = t; c.className = "cue " + (good ? "good" : "bad"); c.style.display = "block";
+  clearTimeout(c._h); c._h = setTimeout(() => c.style.display = "none", 1800); }
+
+$("#startBtn").onclick = async () => {
+  if (!token) { showAuth(); return; }
+  if (!window.isSecureContext) return;
+  store.set("coach_cam", $("#sCam").value); showErr("");
+  try { await openCamera(); }
+  catch (e) { showErr("เปิดกล้องไม่ได้: " + e.message + " (กดอนุญาตกล้องที่แถบด้านบนของ browser)"); return; }
+  W.mode = "practice"; W.ex = curEx; document.body.classList.remove("duelmode", "followmode"); document.body.classList.add("solo"); applyEx();
+  $("#pMode").textContent = "มือโปร · " + EX[W.ex].name; $("#pMode").className = "pill"; soloPip("practice"); soloCount(0); $("#explain").textContent = "";
+  resetPanel(); go("practice"); requestAnimationFrame(draw);
+  const c = $("#countdown"); c.style.display = "flex";
+  c.textContent = "พร้อม"; say(EX[W.ex].ghost.replace("ท่าที่ถูก: ", "")); await sleep(2600);
+  for (const n of [3, 2, 1]) { c.textContent = n; say(String(n)); await sleep(900); if (!W.running) { c.style.display = "none"; return; } }
+  c.textContent = "เริ่ม!"; say("เริ่ม"); await sleep(500); c.style.display = "none";
+  const j = await api("/api/stream/start", {exercise: W.ex});
+  if (!j.ok) { endCamera(); go("setup"); showErr(j.error || "เริ่มไม่ได้"); return; }
+  W.sid = j.id; pump();
+};
+async function openCamera() {
+  const cam = store.get("coach_cam", ""), v = {width: {ideal: 1280}, height: {ideal: 720}};
+  W.stream = await navigator.mediaDevices.getUserMedia({audio: false, video: cam ? {...v, deviceId: {exact: cam}} : {...v, facingMode: facing}});
+  const el = $("#video"); el.srcObject = W.stream; await el.play().catch(() => {});
+  Object.assign(W, {running: true, paused: false, sid: null, seen: 0, lastSeq: 0, result: null, target: null, disp: {}, final: null, fps: 0, fpsCount: 0, rtt: 0});
+  HR.samples = []; updateFlipBtn();
+}
+function resetPanel() {
+  $("#bigReps").textContent = "0"; $("#bigGoal").textContent = `/ ${goal} ครั้ง`; ring($("#repRing"), 0, "0", 116, 10);
+  $("#lastScore").textContent = "-"; ["bDepth", "bBody", "bTempo"].forEach(id => $("#" + id).style.width = "0");
+  $("#hint").style.display = "none"; $("#histList").innerHTML = `<div class="empty" style="padding:10px">ยังไม่มี</div>`;
+  $("#pauseBtn").textContent = "พัก"; $("#waitMsg").textContent = "";
+}
+// เน็ตช้า (เช่นมือถือผ่านลิงก์ออนไลน์) -> ลดขนาด/คุณภาพ/จำนวนภาพต่อวินาทีเอง ให้ CiRA ได้ภาพสด ๆ
+const NET = [{w: 640, q: 0.7, fps: 12}, {w: 512, q: 0.62, fps: 9}, {w: 416, q: 0.55, fps: 7}];
+async function pump() {
+  const v = $("#video"), cap = W.cap;
+  let tick = Date.now(), sent = 0, lvl = 0;
+  while (W.running && W.sid) {
+    const t0 = performance.now();
+    try {
+      if (W.paused) {
+        await fetch(`/api/stream/${W.sid}/frame`, {method: "POST", headers: {"X-Keepalive": "1"}});
+        await sleep(2000); continue;
+      }
+      if (v.videoWidth) {
+        const n = NET[lvl];
+        cap.width = n.w; cap.height = Math.round(n.w * v.videoHeight / v.videoWidth);
+        cap.getContext("2d").drawImage(v, 0, 0, cap.width, cap.height);
+        const blob = await new Promise(res => cap.toBlob(res, "image/jpeg", n.q));
+        const ts = performance.now();
+        const j = await (await fetch(`/api/stream/${W.sid}/frame`, {method: "POST", body: blob,
+          headers: {"Content-Type": "image/jpeg", "X-Capture-Ms": String(Date.now())}})).json();
+        const rtt = performance.now() - ts; W.rtt = W.rtt ? 0.8 * W.rtt + 0.2 * rtt : rtt; sent++;
+        lvl = W.rtt > 450 ? 2 : W.rtt > 250 ? Math.max(lvl, 1) : W.rtt < 160 ? 0 : lvl;
+        if (j.ok === false) break;
+        if (j.status && j.status !== "active") { streamEnded(); break; }
+        onResult(j);
+      }
+    } catch (e) { $("#waitMsg").textContent = "ส่งภาพไม่ได้ เช็กการเชื่อมต่อ"; }
+    if (Date.now() - tick > 1000) { W.fps = W.fpsCount; W.fpsCount = 0; W.sendFps = sent; sent = 0; tick = Date.now(); }
+    $("#pDot").classList.toggle("on", W.fps > 0);
+    // ส่ง = ภาพที่มือถือส่งออกได้ต่อวินาที, CiRA = ภาพที่ CiRA ประมวลผลกลับมา  (ถ้า "ส่ง" ต่ำ = เน็ตช้า ถ้า CiRA ต่ำ = เครื่อง CiRA ช้า)
+    $("#pFps").textContent = W.fps > 0 ? `ส่ง ${W.sendFps || 0} · CiRA ${W.fps} fps` : `ส่ง ${W.sendFps || 0} · รอ CiRA`;
+    await sleep(Math.max(0, 1000 / NET[lvl].fps - (performance.now() - t0)));
+  }
+}
+let fullSaidAt = 0;
+function remindFull() {      // กล้องอยู่ไกล มองจอไม่เห็น -> พูดเตือน (ไม่เกินทุก 8 วิ)
+  const now = performance.now();
+  if (now - fullSaidAt < 8000 || speaking()) return;
+  fullSaidAt = now; say("ถอยออกจากกล้องอีกนิด ให้เห็นทั้งตัว");
+}
+function soloCount(n, score) {   // วงนับครั้งมุมล่างซ้าย
+  ring($("#soloRing"), n / goal, String(n), 116, 10, "#fff");
+  $("#soloLbl").textContent = `${EX[W.ex].name} · เป้า ${goal}`;
+  if (score != null) { const c = $("#scoreChip"); c.textContent = "คะแนน " + score; c.classList.add("show"); clearTimeout(c._h); c._h = setTimeout(() => c.classList.remove("show"), 2500); }
+}
+function soloPip(mode) {     // มุมซ้ายบน: มือใหม่ = คลิปโค้ช (ถ้ามี) / มือโปร = รูปท่าที่ถูก
+  const box = $("#pip"), v = $("#pipVid");
+  box.classList.remove("hasvid"); v.removeAttribute("src"); v.load();
+  $("#pipLbl").textContent = mode === "follow" ? "ท่าของโค้ช" : "ท่าที่ถูก";
+  $("#pipFig").innerHTML = W.ex === "squat" ? figSVG(80, 38, {guide: true}) : figPush(0.85);
+  if (mode === "follow") {
+    v.onloadeddata = () => { box.classList.add("hasvid"); $("#pipLbl").textContent = "คลิปโค้ช"; v.play().catch(() => {}); };
+    v.onerror = () => box.classList.remove("hasvid");
+    v.src = `/static/video/${W.ex}.mp4`;
+  }
+}
+function streamEnded() {
+  // HUB ปิดเซตนี้ไปแล้ว (เช่นเน็ตหลุดนานเกิน 20 วิ)
+  if (W.mode === "duel") { W.sid = null; if (!(D.state === "done" || (D.state === "live" && performance.now() > (D.endT || 0) - 1500))) startDuelStream(); return; }
+  toast("การเชื่อมต่อขาดนานเกินไป จบเซตให้แล้ว"); stopSet();
+}
+function onResult(j) {
+  $("#waitMsg").textContent = j.cira_online ? "" : "CiRA ยังไม่ทำงาน — กด Run ใน CiRA CORE";
+  const r = j.result;
+  if (!r || r.seq === W.lastSeq) return;
+  W.lastSeq = r.seq; W.fpsCount++; W.result = r; W.target = r.kps; W.side = r.side;
+  const noPerson = !r.kps || !Object.keys(r.kps).length;
+  if (noPerson) { W.target = null; W.disp = {}; }          // CiRA บอกว่าไม่ใช่คน → ลบโครงเก่าทิ้งทันที
+  if (ciraOld(r)) { $("#waitMsg").textContent = OLD_MSG; if (W.mode === "follow") lmsg(OLD_MSG, false); return; }
+  if (!W.paused) $("#waitMsg").textContent = noPerson ? "ยังไม่เห็นคนในภาพ\nถอยให้กล้องเห็นตัวตั้งแต่หัวถึงเท้า" :
+    r.full === false ? "ใกล้กล้องเกินไป ถอยออกอีก\nให้เห็นตั้งแต่หัวถึงเท้า" + (r.missing && r.missing.length ? `\n(ยังไม่เห็น: ${r.missing.map(j => JOINT_TH[j] || j).join(" ")})` : "") : "";
+  if (!noPerson && r.full === false) remindFull();
+  const d = r.depth == null ? 100 : Math.max(0, Math.min(100, r.depth));
+  $("#dBar").style.height = d + "%"; $("#dLine").style.bottom = r.depth_bottom + "%";
+  if (W.mode === "duel") { duelReps(r); return; }
+  if (W.mode === "follow") { followResult(r); return; }
+  $("#bigReps").textContent = r.reps; ring($("#repRing"), r.reps / goal, String(r.reps), 116, 10);
+  if (r.rep_log.length > W.seen) soloCount(r.reps, r.rep_log[r.rep_log.length - 1].score); else soloCount(r.reps);
+  for (let i = W.seen; i < r.rep_log.length; i++) {
+    const rep = r.rep_log[i];
+    if (rep.ok) { const n = r.rep_log.slice(0, i + 1).filter(x => x.ok).length; say(String(n)); cue(rep.score >= 85 ? "ดีมาก!" : "ดี", true);
+      if (n === goal) { say("ครบเป้าแล้ว เก่งมาก"); } }
+    if (rep.issues.length) { const t = rep.issues.map(x => ISSUE_TH[x] || x).join(" · "); say(t); cue(t, false); }
+    $("#lastScore").textContent = rep.score ?? "-";
+    $("#bDepth").style.width = (rep.depth ?? 0) + "%"; $("#bBody").style.width = (rep.body ?? 0) + "%";
+    $("#bTempo").style.width = (rep.tempo ?? 0) + "%"; $("#bTempo").style.background = (rep.tempo ?? 100) < 85 ? "var(--amber)" : "";
+    const h = $("#hint"), tips = [];
+    const T = EX[W.ex].tips;
+    if ((rep.depth ?? 100) < 70) tips.push(T.depth);
+    if ((rep.body ?? 100) < 80) tips.push(rep.issues.includes("heels") ? "กดส้นเท้าติดพื้นตลอด" : T.body);
+    if ((rep.tempo ?? 100) < 85) tips.push(rep.tut < 2 ? "ทำเร็วไปนิด ลองลงช้า ๆ 2 วินาที" : "ช้าเกินไปนิด รักษาจังหวะ");
+    h.textContent = tips.join(" · "); h.style.display = tips.length ? "block" : "none";
+  }
+  W.seen = r.rep_log.length;
+  $("#histList").innerHTML = r.rep_log.length ? r.rep_log.slice(-6).reverse().map(x => `<div class="row" style="font-size:14px"><span class="grow">ครั้งที่ ${x.n}</span>
+    <span class="${x.ok ? "muted" : ""}" style="${x.ok ? "" : "color:var(--bad)"}">${x.ok ? "TUT " + x.tut + " วิ" : x.issues.map(i => ISSUE_TH[i] || i).join(", ")}</span>
+    <b class="num" style="width:44px;text-align:right;font-weight:500;${x.ok ? "" : "color:var(--bad)"}">${x.ok ? x.score : "ไม่นับ"}</b></div>`).join("")
+    : `<div class="empty" style="padding:10px">ยังไม่มี</div>`;
+}
+// วาดโครงกระดูกให้ลื่น: ขยับเข้าหาค่าล่าสุดจาก CiRA ทีละนิดทุกเฟรมจอ (ไม่ได้คำนวณท่าเอง)
+function draw() {
+  if (!W.running) return;
+  const c = $("#overlay"), v = $("#video"), dpr = devicePixelRatio || 1;
+  const bw = c.clientWidth, bh = c.clientHeight;
+  // เช็กทั้งกว้างและสูง: ตอนเริ่มดวล กล้องขยายเต็มจอ (ความกว้างเท่าเดิมแต่สูงขึ้น) ถ้าไม่ปรับ โครงจะถูกยืดลงล่าง
+  if (c.width !== Math.round(bw * dpr) || c.height !== Math.round(bh * dpr)) { c.width = Math.round(bw * dpr); c.height = Math.round(bh * dpr); }
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, bw, bh);
+  if (W.target && v.videoWidth) {
+    const s = Math.min(bw / v.videoWidth, bh / v.videoHeight), vw = v.videoWidth * s, vh = v.videoHeight * s, ox = (bw - vw) / 2, oy = (bh - vh) / 2;
+    for (const n in W.target) {
+      const t = W.target[n], d = W.disp[n];
+      W.disp[n] = d ? [d[0] + (t[0] - d[0]) * .35, d[1] + (t[1] - d[1]) * .35, t[2]] : [...t];
+    }
+    const ok = n => W.disp[n] && W.disp[n][2] >= .4, P = n => [ox + W.disp[n][0] * vw, oy + W.disp[n][1] * vh];
+    g.lineWidth = 4; g.lineCap = "round";
+    for (const [a, b] of SKEL) { if (!ok(a) || !ok(b)) continue;
+      g.strokeStyle = W.side && a.startsWith(W.side) && b.startsWith(W.side) ? "#B9A8FF" : "rgba(255,255,255,.55)";
+      g.beginPath(); g.moveTo(...P(a)); g.lineTo(...P(b)); g.stroke(); }
+    g.fillStyle = "#fff";
+    for (const n in W.disp) if (ok(n)) { const [x, y] = P(n); g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); }
+  }
+  if (W.mode === "duel") duelFrame();
+  if (W.mode === "follow") followFrame();
+  requestAnimationFrame(draw);
+}
+function togglePause() {
+  W.paused = !W.paused; $("#pauseBtn").textContent = $("#pauseBtn2").textContent = W.paused ? "ทำต่อ" : "พัก";
+  $("#waitMsg").textContent = W.paused ? "พักอยู่ (ไม่เกิน 15 วินาทีต่อครั้งจะดีที่สุด)" : "";
+  say(W.paused ? "พัก" : "ทำต่อ");
+}
+async function flipCamera() {     // สลับกล้องหน้า/หลัง ระหว่างฝึกหรือในห้องดวล (ไม่ต้องเริ่มใหม่)
+  facing = facing === "user" ? "environment" : "user"; store.set("coach_facing", facing); store.set("coach_cam", "");
+  try {
+    const ns = await navigator.mediaDevices.getUserMedia({audio: false, video: {width: {ideal: 1280}, height: {ideal: 720}, facingMode: facing}});
+    if (W.stream) W.stream.getTracks().forEach(t => t.stop());
+    W.stream = ns; const v = $("#video"); v.srcObject = ns; await v.play().catch(() => {});
+    W.disp = {}; toast(facing === "user" ? "ใช้กล้องหน้า" : "ใช้กล้องหลัง");
+  } catch (e) { toast("สลับกล้องไม่ได้: " + e.message); }
+}
+async function updateFlipBtn() {
+  try { const n = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput").length; $("#flipBtn").style.display = n > 1 ? "" : "none"; } catch (e) {}
+}
+function endCamera() { W.running = false; if (W.stream) W.stream.getTracks().forEach(t => t.stop()); W.stream = null; }
+async function stopSet() {
+  if (W.mode === "duel") { leaveRoom(); return; }
+  if (!W.running) { go("home"); return; }
+  const sid = W.sid, log = W.result ? W.result.rep_log : [], mode = W.mode;
+  sendHR(sid); endCamera(); W.sid = null; W.mode = "practice"; document.body.classList.remove("followmode", "solo");
+  if (!sid) { go("setup"); return; }
+  $("#resultBox").innerHTML = `<div class="card empty">กำลังบันทึกผล…</div>`; go("result");
+  try { await fetch(`/api/stream/${sid}/stop`, {method: "POST"}); } catch (e) {}
+  let final = null;
+  for (let i = 0; i < 40 && !final; i++) { await sleep(500);
+    try { const j = await (await fetch(`/api/stream/${sid}`, {cache: "no-store"})).json(); if (j.status === "done") final = j.final; } catch (e) {} }
+  renderResult(final, log, false, mode);
+  load();
+}
+window.addEventListener("beforeunload", () => {
+  if (W.sid) navigator.sendBeacon(`/api/stream/${W.sid}/stop`);
+  if (W.mode === "duel" && D.code) navigator.sendBeacon(`/api/duel/${D.code}/leave`, new Blob([JSON.stringify({token})], {type: "application/json"}));
+});
+
+
+
+// ================= ท่าออกกำลังกาย =================
+// รูปคนด้านข้าง (หันขวา): b = ต้นขาเอียงจากแนวตั้ง (0 ยืน, 90 ขนานพื้น), c = ลำตัวโน้มจากแนวตั้ง
+function figSVG(b, c, opt = {}) {
+  const R = d => d * Math.PI / 180, a = b * 0.4, col = opt.color || "#4A515D";
+  const A = [92, 136], K = [A[0] + 40 * Math.sin(R(a)), A[1] - 40 * Math.cos(R(a))];
+  const H = [K[0] - 42 * Math.sin(R(b)), K[1] - 42 * Math.cos(R(b))];
+  const S = [H[0] + 48 * Math.sin(R(c)), H[1] - 48 * Math.cos(R(c))], HD = [S[0] + 14 * Math.sin(R(c)), S[1] - 14 * Math.cos(R(c))];
+  const arm = R(Math.max(0, 80 - b)), HN = [S[0] + 38 * Math.cos(arm), S[1] + 38 * Math.sin(arm)];
+  const L = (p, q, w = 7) => `<line x1="${p[0].toFixed(1)}" y1="${p[1].toFixed(1)}" x2="${q[0].toFixed(1)}" y2="${q[1].toFixed(1)}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`;
+  return `<line x1="8" y1="141" x2="152" y2="141" stroke="#C9CDD4" stroke-width="2"/>` +
+    (opt.guide ? `<line x1="20" y1="${K[1].toFixed(1)}" x2="150" y2="${K[1].toFixed(1)}" stroke="#5B3DF5" stroke-width="1.5" stroke-dasharray="4 4"/>` : "") +
+    L([A[0] - 6, 139], [A[0] + 16, 139], 5) + L(A, K) + L(K, H, 8) + L(H, S, 9) + L(S, HN, 5) +
+    `<circle cx="${HD[0].toFixed(1)}" cy="${HD[1].toFixed(1)}" r="9" fill="${col}"/>`;
+}
+// รูปคนด้านหน้า: b = ความลึก (0 ยืน, 90 ขนานพื้น)
+function figFront(b) {
+  const e = Math.min(1, b / 88), col = "#4A515D", hy = 66 + 36 * e, sy = 22 + 34 * e, ky = 102 + 2 * e, kx = 17 + 7 * e;
+  const L = (x1, y1, x2, y2, w = 7) => `<line x1="${x1}" y1="${y1.toFixed(1)}" x2="${x2}" y2="${y2.toFixed(1)}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`;
+  let g = `<line x1="8" y1="141" x2="152" y2="141" stroke="#C9CDD4" stroke-width="2"/>`;
+  for (const sg of [-1, 1]) {
+    const X = v => 80 + sg * v;
+    g += L(X(20), 136, X(kx), ky) + L(X(kx), ky, X(12), hy, 8) + L(X(12), hy, X(20), sy, 8) + L(X(20), sy, X(16 + 6 * e), sy + 34 - 22 * e, 5) +
+      L(X(20), 138, X(27), 139, 5);
+  }
+  return g + L(68, hy, 92, hy, 8) + L(60, sy, 100, sy, 8) + `<circle cx="80" cy="${(sy - 13).toFixed(1)}" r="9" fill="${col}"/>`;
+}
+const PLACE_PUSHUP = `<svg viewBox="0 0 330 150" width="100%" role="img" aria-label="วางกล้องด้านข้าง ระดับพื้น ห่างประมาณ 2 เมตร">
+  <line x1="10" y1="132" x2="320" y2="132" stroke="#C9CDD4" stroke-width="2"/>
+  <rect x="24" y="88" width="20" height="44" rx="5" fill="none" stroke="#14161A" stroke-width="2"/><rect x="30" y="92" width="8" height="4" rx="2" fill="#14161A"/>
+  <path d="M44 102 L300 52 M44 112 L300 140" stroke="#5B3DF5" stroke-width="1.5" stroke-dasharray="5 5" fill="none"/>
+  <circle cx="270" cy="88" r="11" fill="#C9CDD4"/><rect x="150" y="92" width="112" height="18" rx="9" fill="#C9CDD4" transform="rotate(-8 206 101)"/>
+  <rect x="252" y="96" width="10" height="36" rx="5" fill="#C9CDD4"/><rect x="140" y="112" width="10" height="20" rx="5" fill="#C9CDD4"/>
+  <line x1="44" y1="146" x2="250" y2="146" stroke="#5F6672" stroke-width="1"/><text x="147" y="143" text-anchor="middle" fill="#5F6672" font-size="11">~2 เมตร</text></svg>`;
+const PLACE_SQUAT = `<svg viewBox="0 0 330 170" width="100%" role="img" aria-label="วางกล้องด้านข้าง สูงระดับเอว ห่าง 2.5 ถึง 3 เมตร">
+  <line x1="10" y1="150" x2="320" y2="150" stroke="#C9CDD4" stroke-width="2"/>
+  <line x1="40" y1="96" x2="28" y2="150" stroke="#14161A" stroke-width="2"/><line x1="40" y1="96" x2="52" y2="150" stroke="#14161A" stroke-width="2"/><line x1="40" y1="96" x2="40" y2="150" stroke="#14161A" stroke-width="2"/>
+  <rect x="30" y="72" width="20" height="26" rx="4" fill="none" stroke="#14161A" stroke-width="2"/><circle cx="40" cy="80" r="3" fill="#14161A"/>
+  <path d="M50 84 L300 14 M50 88 L300 158" stroke="#5B3DF5" stroke-width="1.5" stroke-dasharray="5 5" fill="none"/>
+  <g transform="translate(196 6) scale(0.98)">${figSVG(0, 5, {color: "#C9CDD4"})}</g>
+  <text x="60" y="66" fill="#5F6672" font-size="11">สูงระดับเอว</text>
+  <line x1="52" y1="164" x2="280" y2="164" stroke="#5F6672" stroke-width="1"/><text x="166" y="161" text-anchor="middle" fill="#5F6672" font-size="11">2.5–3 เมตร</text></svg>`;
+const EX = {
+  pushup: {name: "วิดพื้น", sub: "อก · แขนหลัง · ไหล่หน้า", chips: ["อก", "แขนหลัง", "ไหล่หน้า"], bars: ["ความลึก", "ลำตัวตรง", "จังหวะ"],
+    ghost: "ท่าที่ถูก: ลงจนอกเกือบถึงพื้น", place: () => PLACE_PUSHUP,
+    ghostFig: `<svg width="110" height="50" viewBox="0 0 108 52" role="img" aria-label="ท่าที่ถูก"><line x1="2" y1="46" x2="106" y2="46" stroke="#E6E8EC" stroke-width="1.5"/><circle cx="14" cy="30" r="6" fill="#8C96A3"/><polyline points="20,32 30,43 22,46" fill="none" stroke="#8C96A3" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><line x1="20" y1="32" x2="100" y2="42" stroke="#8C96A3" stroke-width="5" stroke-linecap="round"/></svg>`,
+    steps: ["วางมือถือหรือกล้อง<strong style=\"font-weight:500\">ด้านข้าง</strong>ระดับพื้น ห่างประมาณ 2 เมตร", "ให้เห็นตัวตั้งแต่หัวถึงเท้า (มือถือให้ตั้งแนวนอน)", "เปิดเสียง กด <strong style=\"font-weight:500\">เริ่ม</strong> มือใหม่: ดูคลิปโค้ช ฟังเสียงอธิบายแล้วทำตาม · มือโปร: นับครั้งเก็บ EXP (มีเสียงนับให้ ไม่ต้องมองจอ)"],
+    tips: {depth: "ลงให้ลึกขึ้นอีกนิด", body: "เกร็งท้อง ให้ลำตัวตรงเป็นเส้นเดียว"}},
+  squat: {name: "สควอท", sub: "ต้นขาหน้า · ก้น · ต้นขาหลัง", chips: ["ต้นขาหน้า", "ก้น", "ต้นขาหลัง"], bars: ["ความลึก", "ลำตัว/ส้นเท้า", "จังหวะ"],
+    ghost: "ท่าที่ถูก: ย่อจนต้นขาขนานพื้น อกตั้ง", place: () => PLACE_SQUAT,
+    ghostFig: `<svg width="90" height="84" viewBox="0 0 160 150" role="img" aria-label="ท่าที่ถูก">${figSVG(88, 40, {color: "#8C96A3", guide: true})}</svg>`,
+    steps: ["วางกล้องสูงประมาณระดับเอว ห่าง 2.5–3 เมตร (วางบนโต๊ะ/ชั้นได้) ให้เห็นตั้งแต่หัวถึงเท้า",
+      "<strong style=\"font-weight:500\">หันข้าง</strong> = ตรวจความลึกและหลัง · <strong style=\"font-weight:500\">หันหน้า</strong> = ตรวจการกางขาและเข่าบิด ระบบรู้มุมเอง", "กด <strong style=\"font-weight:500\">เริ่ม</strong> มือใหม่: ดูคลิปโค้ช ฟังเสียงอธิบายแล้วทำตาม · มือโปร: นับครั้งเก็บ EXP (มีเสียงนับให้ ไม่ต้องมองจอ)"],
+    tips: {depth: "ย่อให้ลึกขึ้น ให้ต้นขาขนานพื้น", body: "ยกอกขึ้น อย่าโน้มตัวไปหน้ามาก"}},
+};
+let curEx = EX[store.get("coach_ex", "pushup")] ? store.get("coach_ex", "pushup") : "pushup";
+W.ex = curEx;
+let trainMode = store.get("coach_mode", "pro") === "beginner" ? "beginner" : "pro";
+function chooseEx(ex, mode) { if (EX[ex]) { curEx = ex; store.set("coach_ex", ex); } if (mode) { trainMode = mode; store.set("coach_mode", mode); } }
+function renderSetupEx() {
+  const e = EX[curEx];
+  document.querySelectorAll("#exSeg button").forEach(b => b.classList.toggle("on", b.dataset.ex === curEx));
+  $("#sTitle").textContent = e.name; $("#sSub").textContent = e.sub; $("#sPlace").innerHTML = e.place();
+  $("#sSteps").innerHTML = e.steps.map((t, i) => `<div><b>${i + 1}</b><span>${t}</span></div>`).join("");
+  const beg = trainMode === "beginner" && FOLLOW[curEx];
+  $("#lessonBtn").style.display = beg ? "" : "none";
+  $("#startBtn").style.display = beg ? "none" : "";
+  $("#startBtn").className = "btn primary block";
+  $("#startBtn").innerHTML = `เริ่ม · มือโปร<small style="font-size:12px;opacity:.85;margin-left:6px">นับครั้ง เก็บ EXP</small>`;
+  $("#lessonBtn").innerHTML = `เริ่ม · มือใหม่<small style="font-size:12px;opacity:.85">ดูคลิปโค้ช + ฟังวิธีทำ แล้วทำตาม</small>`;
+  $("#sBack").href = "#/train?m=" + trainMode;
+}
+document.querySelectorAll("#exSeg button").forEach(b => b.onclick = () => { chooseEx(b.dataset.ex); renderSetupEx(); });
+function applyEx() {
+  const e = EX[W.ex];
+  $("#ghostFig").innerHTML = e.ghostFig; $("#ghostText").textContent = e.ghost;
+  document.querySelectorAll(".bars > div > span:first-child").forEach((el, i) => el.textContent = e.bars[i]);
+}
+
+// ================= หน้าเลือกท่า =================
+// รูปที่ตกแต่งเองใส่ไว้ที่ hub/static/img/... ถ้าไม่มีไฟล์ จะใช้ภาพวาดสำรองแทนอัตโนมัติ
+const EXCARDS = [
+  {key: "pushup", ai: true}, {key: "squat", ai: true},
+  {key: "plank", name: "แพลงก์", sub: "แกนกลางลำตัว"}, {key: "lunge", name: "ลันจ์", sub: "ต้นขา · ก้น"},
+  {key: "jumpingjack", name: "กระโดดตบ", sub: "คาร์ดิโอ"}, {key: "stretch", name: "ยืดเหยียด", sub: "ก่อน-หลังออกกำลัง"},
+];
+const ART = {
+  pushup: () => figPush(0.15).replaceAll("#4A515D", "#fff").replaceAll("#C9CDD4", "rgba(255,255,255,.35)"),
+  squat: () => figSVG(72, 32, {color: "#fff"}).replace("#C9CDD4", "rgba(255,255,255,.35)"),
+};
+function renderTrain() {
+  const m = new URLSearchParams(location.hash.split("?")[1] || "").get("m");
+  $("#trModes").style.display = m ? "none" : "flex"; $("#trEx").style.display = m ? "flex" : "none";
+  if (!m) return;
+  trainMode = m === "beginner" ? "beginner" : "pro"; store.set("coach_mode", trainMode);
+  $("#trTitle").textContent = trainMode === "beginner" ? "มือใหม่ · เลือกท่า" : "มือโปร · เลือกท่า";
+  $("#trSub").textContent = trainMode === "beginner" ? "ดูคลิปโค้ช ฟังวิธีทำ แล้วทำตาม AI นับให้" : "นับเฉพาะครั้งที่ท่าถูก เก็บ EXP";
+  $("#exGrid").innerHTML = EXCARDS.map(c => {
+    const e = EX[c.key] || {}, name = c.name || e.name, sub = c.sub || e.sub;
+    const art = ART[c.key] ? `<svg viewBox="0 0 160 150">${ART[c.key]()}</svg>` :
+      `<svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.75)" stroke-width="1.6" stroke-linecap="round" style="width:46%"><circle cx="12" cy="4.5" r="2"/><path d="M8 8h8l-1 7h-6z"/><path d="M9 15l-1 6"/><path d="M15 15l1 6"/><path d="M8 8l-3 5"/><path d="M16 8l3 5"/></svg>`;
+    const inner = `<div class="xart">${art}</div><img src="/static/img/ex/${c.key}.jpg" alt="" onerror="this.remove()"><div class="xshade"></div>
+      <span class="xtag">${c.ai ? "AI ตรวจท่า" : "เร็ว ๆ นี้"}</span><div class="xinfo"><b>${name}</b><small>${sub}</small></div>`;
+    return c.ai ? `<a class="xc" href="#/setup" onclick="chooseEx('${c.key}')">${inner}</a>` : `<div class="xc soon" aria-disabled="true">${inner}</div>`;
+  }).join("");
+}
+const rankImg = (name, size = 20) => name ? `<img class="rk" src="/static/img/rank/${String(name).toLowerCase()}.png" width="${size}" height="${size}" alt="" onerror="this.remove()">` : "";
+
+// ================= หัวใจจากนาฬิกา/สายวัด (Bluetooth มาตรฐาน Heart Rate) =================
+const HR = {dev: null, bpm: null, samples: []};
+function hrNote() {
+  if (!$("#hrNote")) return;
+  if (!navigator.bluetooth) { $("#hrBtn").disabled = true; $("#hrNote").textContent = "เบราว์เซอร์นี้ยังไม่รองรับ (iPhone/Safari ไม่รองรับ) ใช้ Chrome บน Android หรือคอมแทน"; return; }
+  $("#hrNote").textContent = HR.dev ? `เชื่อมแล้ว: ${HR.dev.name || "อุปกรณ์"} ${HR.bpm ? "· " + HR.bpm + " bpm" : ""}` : "นาฬิกาต้องเปิดโหมด \"ส่งข้อมูลหัวใจ / Broadcast Heart Rate\" ก่อน";
+}
+async function connectHR() {
+  try {
+    const dev = await navigator.bluetooth.requestDevice({filters: [{services: ["heart_rate"]}]});
+    const srv = await (await dev.gatt.connect()).getPrimaryService("heart_rate");
+    const ch = await srv.getCharacteristic("heart_rate_measurement");
+    ch.addEventListener("characteristicvaluechanged", ev => {
+      const v = ev.target.value, flags = v.getUint8(0);
+      HR.bpm = flags & 1 ? v.getUint16(1, true) : v.getUint8(1);
+      if (W.running && HR.bpm > 30) HR.samples.push(HR.bpm);
+      $("#pHr").style.display = ""; $("#pHr").querySelector("b").textContent = HR.bpm;
+      if ($("#hrNote")) hrNote();
+    });
+    await ch.startNotifications();
+    dev.addEventListener("gattserverdisconnected", () => { HR.dev = null; $("#pHr").style.display = "none"; hrNote(); toast("นาฬิกาหลุดการเชื่อมต่อ"); });
+    HR.dev = dev; hrNote(); toast("เชื่อมนาฬิกาแล้ว");
+  } catch (e) { if (e.name !== "NotFoundError") toast("เชื่อมไม่ได้: " + e.message); }
+}
+function sendHR(sid) {
+  if (!sid || HR.samples.length < 3) return;
+  const avg = Math.round(HR.samples.reduce((a, b) => a + b, 0) / HR.samples.length), max = Math.max(...HR.samples);
+  navigator.sendBeacon(`/api/stream/${sid}/hr`, new Blob([JSON.stringify({avg, max})], {type: "application/json"}));
+}
+
+// ================= มือใหม่: ดูคลิปโค้ช + ฟังอธิบายท่า แล้วทำตาม (นับแค่จำนวนครั้ง) =================
+// ถ้ามีคลิปของโค้ชเอง (hub/static/video/<ท่า>.mp4) จะเล่นมุมซ้ายบน ไม่มีก็ใช้รูปการ์ตูนขยับให้ดู ; การนับ/ตรวจท่าทำใน CiRA ทั้งหมด
+const FOLLOW = {
+  squat: {explain: ["สควอท ฝึกต้นขาและก้น", "ยืนเท้ากว้างเท่าไหล่ ปลายเท้าชี้ออกเล็กน้อย", "ดันสะโพกไปข้างหลังเหมือนจะนั่งเก้าอี้ ย่อจนต้นขาขนานพื้น",
+                   "อกตั้ง ส้นเท้าติดพื้น แล้วดันพื้นยืนขึ้นจนสุด", "ลงช้า ๆ ประมาณ 2 วินาที ทำตามคลิปได้เลย"]},
+  pushup: {explain: ["วิดพื้น ฝึกอก แขนหลัง และไหล่", "วางมือกว้างกว่าไหล่เล็กน้อย เกร็งท้องให้ตัวตรงตั้งแต่หัวถึงส้นเท้า",
+                    "ลงช้า ๆ จนอกเกือบถึงพื้น", "แล้วดันขึ้นจนแขนเกือบตึง", "ทำตามคลิปได้เลย"]},
+};
+const FL = {phase: "", t0: 0, base: 0, ok: 0, target: 10, figKey: "", done: false};
+// ข้อความบนจอ (กล่องกลางล่าง) ; ข้อความดีหายเองใน 3 วินาที
+function lmsg(t, good) {
+  const el = $("#explain"); el.textContent = t; el.className = "explain" + (good ? "" : " bad");
+  clearTimeout(el._h); if (good && FL.phase === "go") el._h = setTimeout(() => { el.textContent = ""; }, 3000);
+}
+function speaking() { try { return speechSynthesis.speaking || speechSynthesis.pending; } catch (e) { return false; } }
+function figPush(e) {   // วิดพื้นด้านข้าง e: 0 = แขนตึง, 1 = ลงสุด
+  const col = "#4A515D", sy = 70 + 38 * e, hy = 88 + 30 * e, L = (a, b, c, d, w = 7) => `<line x1="${a}" y1="${b.toFixed(1)}" x2="${c}" y2="${d.toFixed(1)}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`;
+  const ex = 40 + 22 * e, ey = sy + (126 - sy) / 2 - 6 * e;
+  return `<line x1="8" y1="133" x2="152" y2="133" stroke="#C9CDD4" stroke-width="2"/>` + L(42, sy, ex, ey, 5) + L(ex, ey, 40, 128, 5) +
+    L(42, sy, 96, hy, 9) + L(96, hy, 146, 128, 8) + `<circle cx="26" cy="${(sy - 4).toFixed(1)}" r="9" fill="${col}"/>`;
+}
+async function startFollow() {
+  if (!token) { showAuth(); return; }
+  if (!window.isSecureContext) return;
+  store.set("coach_cam", $("#sCam").value); showErr("");
+  try { await openCamera(); }
+  catch (e) { showErr("เปิดกล้องไม่ได้: " + e.message + " (กดอนุญาตกล้องที่แถบด้านบนของ browser)"); return; }
+  W.mode = "follow"; W.ex = curEx; applyEx();
+  document.body.classList.remove("duelmode", "duel-play"); document.body.classList.add("followmode", "solo");
+  $("#pMode").textContent = "มือใหม่ · " + EX[W.ex].name; $("#pMode").className = "pill";
+  Object.assign(FL, {phase: "intro", ok: 0, base: 0, target: goal, done: false, figKey: "", t0: performance.now()});
+  soloPip("follow"); soloCount(0);
+  go("practice"); requestAnimationFrame(draw);
+  const j = await api("/api/stream/start", {exercise: W.ex});
+  if (j.ok === false) { endCamera(); document.body.classList.remove("followmode", "solo"); W.mode = "practice"; go("setup"); showErr(j.error); return; }
+  W.sid = j.id; pump();
+  // 1) อธิบายท่าด้วยเสียง ทีละประโยค (ดูคลิปมุมซ้ายบนไปด้วย)
+  for (const line of FOLLOW[W.ex].explain) {
+    if (W.mode !== "follow") return;
+    lmsg(line, true); say(line);
+    await sleep(600 + line.length * 75);
+  }
+  for (const n of ["3", "2", "1"]) { if (W.mode !== "follow") return; lmsg(n, true); say(n); await sleep(900); }
+  if (W.mode !== "follow") return;
+  FL.phase = "go"; FL.base = W.result ? W.result.rep_log.length : 0; W.seen = FL.base;
+  lmsg("เริ่ม! ทำตามคลิปได้เลย", true); say("เริ่ม");
+}
+function followResult(r) {
+  const m = r.metrics || {};
+  if (!r.kps || !Object.keys(r.kps).length) { if (FL.phase !== "go") lmsg("ยังไม่เห็นตัวในกล้อง — ถอยให้เห็นทั้งตัว", false); W.seen = r.rep_log.length; return; }
+  if (m.visible === false && FL.phase === "intro") lmsg(seeMsg(m), false);
+  if (FL.phase !== "go") { W.seen = r.rep_log.length; return; }
+  for (let i = Math.max(W.seen, FL.base); i < r.rep_log.length; i++) {
+    const rep = r.rep_log[i];
+    if (rep.ok) {
+      FL.ok++; soloCount(FL.ok, rep.score);
+      say(String(FL.ok)); cue(rep.score >= 85 ? "ดีมาก!" : "ดี", true);
+    } else {
+      const t = rep.issues.map(x => ISSUE_TH[x] || x).join(" · ");
+      try { speechSynthesis.cancel(); } catch (e) {}
+      say("ไม่นับ " + t); cue(t, false); lmsg("ไม่นับ: " + t, false);
+    }
+  }
+  W.seen = r.rep_log.length;
+  if (FL.ok >= FL.target && !FL.done) {
+    FL.done = true; FL.phase = "end"; lmsg("ครบแล้ว เก่งมาก!", true); say("ครบแล้ว เก่งมาก");
+    setTimeout(() => { if (W.mode === "follow") stopSet(); }, 1800);
+  }
+}
+function followFrame() {   // ไม่มีคลิป: รูปการ์ตูนมุมซ้ายบนทำท่าวนให้ดู (ลง 2 วิ ขึ้น 1 วิ) แบบเงียบ ๆ
+  if ($("#pip").classList.contains("hasvid")) return;
+  const t = ((performance.now() - FL.t0) / 1000) % 3.6;
+  let e = t < 2 ? t / 2 : t < 2.3 ? 1 : t < 3.3 ? 1 - (t - 2.3) : 0;
+  e = e * e * (3 - 2 * e);
+  const key = W.ex + e.toFixed(2);
+  if (key !== FL.figKey) { FL.figKey = key; $("#pipFig").innerHTML = W.ex === "squat" ? figSVG(88 * e, 6 + 34 * e, {guide: true}) : figPush(e); }
+}
+
+// ================= ดวล 1:1 =================
+const D = {code: null, view: null, state: null, round: 0, base: 0, loopId: 0, startT: 0, endT: 0, label: "", sec: null, opp: null, oppDisp: {}};
+async function api(url, body) {
+  try {
+    const h = token ? {"X-Token": token} : {};
+    const r = await fetch(url, body === undefined ? {cache: "no-store", headers: h} : {method: "POST", headers: {...h, "Content-Type": "application/json"}, body: JSON.stringify(body)});
+    const j = await r.json();
+    if (r.status === 401 && j.auth && !url.startsWith("/api/auth")) { token = ""; store.set("coach_token", ""); showAuth("กรุณาเข้าสู่ระบบอีกครั้ง"); }
+    return j;
+  } catch (e) { return {ok: false, error: "เชื่อมต่อ HUB ไม่ได้", net: true}; }
+}
+// ห้องที่เพื่อนสร้างรออยู่: แสดงให้กดเข้าได้เลย (กันสร้างห้องแยกกันคนละห้อง)
+let openRooms = [];
+async function loadOpenRooms() {
+  const j = await api("/api/duel/open");
+  openRooms = j.ok === false ? [] : j.rooms;
+  const box = $("#dOpen");
+  box.style.display = openRooms.length ? "flex" : "none";
+  box.innerHTML = `<h2 style="font-size:17px">เพื่อนรอดวลอยู่ กดเข้าได้เลย</h2>` + openRooms.map(r =>
+    `<div class="row">${avt(r.host, 32)}<span class="grow"><b>${esc(r.host)}</b> <small class="muted">Lv.${r.level} · ${esc(r.rank)} · ${r.exercise && EX[r.exercise] ? EX[r.exercise].name : "ยังไม่เลือกท่า"} · ห้อง ${r.code}</small></span>
+     <button class="btn primary" style="min-height:40px" onclick="duelJoin('${r.code}')">เข้าห้องนี้</button></div>`).join("");
+}
+async function switchRoom(code) { await leaveRoom(); duelJoin(code); }
+setInterval(() => { if (location.hash.startsWith("#/duel") && token) loadOpenRooms(); }, 3000);
+function prepDuel() {
+  loadOpenRooms();
+  $("#dName").value = me; $("#dJoinErr").style.display = "none";
+  const m = location.hash.match(/room=(\d{4})/); if (m) $("#dJoinCode").value = m[1];
+  if (!window.isSecureContext) duelErr("browser ไม่ให้เปิดกล้องผ่านลิงก์ http ให้ใช้ลิงก์ https (ลิงก์ trycloudflare หรือ https://...:5443)");
+  const rec = data && data.profile && data.profile.duels;
+  $("#dElo").textContent = data && data.profile ? `${data.profile.rank.name} (${data.profile.rp} RP)` : "Bronze";
+  if (rec && rec.played) {
+    $("#dRecord").style.display = "";
+    $("#dRecord").innerHTML = `<h2 style="font-size:17px;margin-bottom:6px">สถิติดวลของคุณ</h2>
+      <div class="stats3" style="margin-bottom:6px"><div class="card"><b style="color:var(--good)">${rec.win}</b><small class="muted">ชนะ</small></div>
+      <div class="card"><b>${rec.draw}</b><small class="muted">เสมอ</small></div><div class="card"><b style="color:var(--bad)">${rec.loss}</b><small class="muted">แพ้</small></div></div>
+      ${rec.recent.map(d => `<div class="row"><span class="grow">vs ${esc(d.opponent)}<br><small class="muted">${ago(d.ts)}</small></span>
+      <span class="num">${d.me} - ${d.them}</span><span class="chip ${d.result === "win" ? "ok" : ""}">${{win: "ชนะ", draw: "เสมอ", loss: "แพ้"}[d.result]}</span></div>`).join("")}`;
+  } else $("#dRecord").style.display = "none";
+}
+function duelErr(t) { $("#dJoinErr").textContent = t; $("#dJoinErr").style.display = t ? "block" : "none"; }
+function duelName() { if (!token) { showAuth(); return null; } return me; }
+
+async function duelCreate() {
+  if (!duelName() || !window.isSecureContext) return;
+  const j = await api("/api/duel/create", {});
+  if (j.ok === false) { duelErr(j.error); return; }
+  enterRoom(j);
+}
+async function duelJoin(codeArg) {
+  if (!duelName() || !window.isSecureContext) return;
+  const code = codeArg || $("#dJoinCode").value.trim();
+  if (!/^\d{4}$/.test(code)) { duelErr("ใส่รหัสห้อง 4 หลัก"); $("#dJoinCode").focus(); return; }
+  const j = await api(`/api/duel/${code}/join`, {player: me});
+  if (j.ok === false) { duelErr(j.error); return; }
+  enterRoom(j);
+}
+async function enterRoom(view) {
+  duelErr("");
+  try { await openCamera(); }
+  catch (e) { await api(`/api/duel/${view.code}/leave`, {player: me}); go("duel"); duelErr("เปิดกล้องไม่ได้: " + e.message); return; }
+  $("#hScMe").textContent = $("#hScOp").textContent = $("#hCoinN").textContent = "0";
+  Object.assign(D, {exKey: "", code: view.code, view: null, state: null, round: view.round, base: 0, label: "", sec: null, opp: null, oppDisp: {}});
+  W.mode = "duel"; W.ex = view.exercise || "pushup"; applyEx(); document.body.classList.remove("followmode", "solo"); document.body.classList.add("duelmode");
+  $("#dCode").textContent = D.code; $("#dErr").style.display = "none"; $("#countdown").style.display = "none";
+  go("practice"); requestAnimationFrame(draw);
+  onRoom(view); startDuelStream(); duelLoop();
+}
+async function startDuelStream() {
+  if (!W.running || W.mode !== "duel" || W.sid) return;
+  const j = await api("/api/stream/start", {exercise: W.ex, duel: D.code});
+  if (j.ok === false) {
+    $("#dErr").textContent = j.error + " — จะลองใหม่อัตโนมัติ"; $("#dErr").style.display = "block";
+    setTimeout(startDuelStream, 3000); return;
+  }
+  $("#dErr").style.display = "none"; W.sid = j.id; pump();
+}
+async function duelLoop() {
+  const my = ++D.loopId;
+  while (W.running && W.mode === "duel" && D.loopId === my) {
+    const v = await api(`/api/duel/${D.code}?player=${encodeURIComponent(me)}`);
+    if (D.loopId !== my || !W.running) return;
+    if (v.ok === false && !v.net) { toast(v.error); leaveRoom(); return; }
+    if (v.ok !== false) {
+      onRoom(v);
+      if (v.state === "done") { duelDone(v); return; }
+      if (v.state === "lobby" && !v.players.some(p => p.me)) {        // หลุดจากห้อง (เน็ตสะดุด) -> กลับเข้าเอง
+        const j = await api(`/api/duel/${D.code}/join`, {});
+        if (j.ok === false) { toast(j.error); leaveRoom(); return; }
+        W.sid = null; startDuelStream(); onRoom(j); toast("กลับเข้าห้องแล้ว");
+      }
+      // กล้องหลุดระหว่างอยู่ในห้อง (เช่น stream ถูกปิดเพราะเน็ตช้า) -> เปิดใหม่
+      const meP = v.players.find(p => p.me);
+      if (v.state === "lobby" && meP && !meP.camera && W.sid) { W.sid = null; startDuelStream(); }
+    }
+    await sleep(D.state === "lobby" ? 700 : 300);
+  }
+}
+function onRoom(v) {
+  D.view = v;
+  const meP = v.players.find(p => p.me) || {}, opp = v.players.find(p => !p.me) || null;
+  if (v.state !== D.state) {
+    const prev = D.state; D.state = v.state;
+    $("#dLobby").style.display = v.state === "lobby" ? "flex" : "none";
+    $("#dCodeBox").style.display = v.state === "lobby" ? "flex" : "none";
+    $("#dScore").style.display = v.state === "lobby" ? "none" : "flex";
+    $("#dLeave").textContent = v.state === "live" ? "ยอมแพ้ / ออก" : "ออกจากห้อง";
+    if (v.state === "lobby" && prev === "countdown") { $("#countdown").style.display = "none"; toast("ยกเลิกการนับ เพื่อนออกจากห้อง"); }
+  }
+  if (v.state === "countdown") D.startT = performance.now() + v.starts_in * 1000;
+  if (v.state === "live") D.endT = performance.now() + v.ends_in * 1000;
+  D.base = meP.base || 0; D.opp = opp;
+  $("#oppName").textContent = opp ? opp.name : "เพื่อน";
+  $("#oppWait").textContent = !opp ? "รอเพื่อนเข้าห้อง" : !opp.camera ? "เพื่อนกำลังเปิดกล้อง" : !opp.cam_ok ? "ยังไม่เห็นตัวเพื่อน" : "";
+  $("#dOppLabel").textContent = opp ? opp.name : "เพื่อน";
+  const a = meP.score || 0, b = opp ? opp.score : 0;
+  $("#dMe").textContent = a; $("#dOpp").textContent = b;
+  document.body.classList.toggle("duel-play", v.state === "countdown" || v.state === "live");
+  const av = (el, p) => {
+    el.style.background = p && p.rank ? p.rank.color : "#5F6672";
+    const sp = el.firstElementChild, url = p && p.avatar;
+    sp.innerHTML = url ? `<img src="${esc(url)}" alt="" style="width:100%;height:100%;object-fit:cover">` : esc(p ? p.name.slice(0, 1).toUpperCase() : "?");
+  };
+  av($("#hAvMe"), meP.name ? meP : null); av($("#hAvOp"), opp);
+  $("#hNmMe").textContent = "คุณ"; $("#hNmOp").textContent = opp ? opp.name : "รอเพื่อน";
+  $("#hEloMe").textContent = meP.rank ? `Lv.${meP.level} · ${meP.rank.name}` : ""; $("#hEloOp").textContent = opp ? `Lv.${opp.level} · ${opp.rank.name}` : "";
+  if (String(a) !== $("#hScMe").textContent) {
+    $("#hScMe").textContent = a; $("#hCoinN").textContent = a;
+    const c = $("#hCoin"); c.classList.remove("pop"); void c.offsetWidth; if (a > 0) c.classList.add("pop");
+  }
+  $("#hScOp").textContent = b;
+  const pct = a + b ? Math.round(100 * a / (a + b)) : 50;
+  $("#hTug").style.width = pct + "%"; $("#hKnob").style.left = pct + "%";
+  $("#vsFill").style.width = (a + b ? Math.round(100 * a / (a + b)) : 50) + "%";
+  if (v.state === "lobby") {
+    renderDuelEx(v);
+    if (v.exercise && v.exercise !== W.ex) {            // เปลี่ยนท่า -> เปลี่ยนตัวตรวจท่าใน CiRA (เริ่มส่งภาพชุดใหม่)
+      W.ex = v.exercise; applyEx();
+      if (W.sid) { const old = W.sid; W.sid = null; fetch(`/api/stream/${old}/stop`, {method: "POST"}).catch(() => {}); startDuelStream(); }
+      toast("ท่าที่จะแข่ง: " + EX[W.ex].name);
+    }
+    const row = (p, you) => !p ? `<div class="prow"><span class="grow muted">รอเพื่อนเข้าห้อง…</span></div>` :
+      `<div class="prow">${avt(p.name, 32)}<span class="grow">${esc(p.name)}${you ? " (คุณ)" : ""} <small class="muted">Lv.${p.level} · ${esc(p.rank.name)}</small></span>
+        <span class="chip ${p.cam_ok ? "ok" : "no"}">${p.cam_ok ? "เห็นเต็มตัวแล้ว" : p.camera ? "ยังไม่เห็นเต็มตัว" : "ยังไม่เปิดกล้อง"}</span>
+        <span class="chip ${p.ready ? "rd" : "no"}">${p.ready ? "พร้อม" : "ยังไม่พร้อม"}</span></div>`;
+    $("#dPlayers").innerHTML = row(meP.name ? meP : null, true) + (opp || !openRooms.length ? row(opp, false) :
+      `<div class="prow" style="border-color:var(--accent)"><span class="grow"><b>${esc(openRooms[0].host)}</b> สร้างอีกห้องรออยู่ (ห้อง ${openRooms[0].code})</span>
+        <button class="btn primary" style="min-height:40px" onclick="switchRoom('${openRooms[0].code}')">ไปเข้าห้องนั้น</button></div>`);
+    if (!opp && (D.openTick = (D.openTick || 0) + 1) % 4 === 1) loadOpenRooms();
+    const btn = $("#dReady");
+    btn.disabled = !meP.ready && (!meP.cam_ok || !v.exercise); btn.textContent = meP.ready ? "ยกเลิกพร้อม" : "พร้อม";
+    btn.className = "btn block " + (meP.ready ? "" : "primary");
+    $("#dHint").textContent = !v.cira_online ? "CiRA CORE ยังไม่ทำงาน ให้เจ้าของเครื่องกด Run ใน CiRA" :
+      !v.exercise ? (v.host === me ? "เลือกท่าที่จะแข่งด้านบนก่อน" : `รอ ${v.host} เลือกท่าที่จะแข่ง`) :
+      !opp ? `ส่งรหัส ${v.code} หรือลิงก์ให้เพื่อน แล้วรอเพื่อนเข้าห้อง` :
+      !meP.cam_ok ? "วางมือถือไว้ไกล 2-3 เมตร ถอยจนกล้องเห็นตั้งแต่หัวถึงเท้า แล้วปุ่มพร้อมจะกดได้" :
+      !meP.ready ? "กล้องเห็นตัวแล้ว กด พร้อม ได้เลย" :
+      !opp.ready || !opp.cam_ok ? `รอ ${opp.name} กดพร้อม…` : "กำลังเริ่ม…";
+  }
+}
+function renderDuelEx(v) {
+  const host = v.host === me, opts = ["pushup", "squat"];
+  $("#dExLbl").textContent = v.exercise ? `แข่ง${EX[v.exercise].name} ${v.seconds} วินาที${host ? " (แตะเพื่อเปลี่ยน)" : ""}` : host ? "เลือกท่าที่จะแข่ง" : `รอ ${v.host} เลือกท่า`;
+  const key = opts.map(k => k + (k === v.exercise)).join() + host;
+  if (key === D.exKey) return;
+  D.exKey = key;
+  $("#dExGrid").innerHTML = opts.map(k => `<div class="xc ${k === v.exercise ? "sel" : ""} ${host ? "" : "locked"}" ${host ? `onclick="chooseDuelEx('${k}')"` : ""}>
+      <div class="xart"><svg viewBox="0 0 160 150">${ART[k]()}</svg></div><img src="/static/img/ex/${k}.jpg" alt="" onerror="this.remove()"><div class="xshade"></div>
+      <span class="xtag">เลือกแล้ว</span><div class="xinfo"><b>${EX[k].name}</b></div></div>`).join("") +
+    `<div class="xc soon locked"><div class="xart"><svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.75)" stroke-width="1.6" style="width:50%"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg></div><div class="xshade"></div><div class="xinfo"><b>เกม (เร็ว ๆ นี้)</b></div></div>`;
+}
+async function chooseDuelEx(k) {
+  const v = await api(`/api/duel/${D.code}/exercise`, {exercise: k});
+  if (v.ok === false) { toast(v.error); return; }
+  onRoom(v);
+}
+async function toggleReady() {
+  const meP = D.view && D.view.players.find(p => p.me);
+  const v = await api(`/api/duel/${D.code}/ready`, {player: me, ready: !(meP && meP.ready)});
+  if (v.ok !== false) onRoom(v);
+}
+function copyRoom() {
+  const local = ["127.0.0.1", "localhost"].includes(location.hostname);
+  const base = local && streams.public_url ? streams.public_url : location.origin;
+  const link = `${base}/#/duel?room=${D.code}`, text = `มาดวลวิดพื้นกัน! รหัสห้อง ${D.code}\n${link}`;
+  if (navigator.share && matchMedia("(pointer:coarse)").matches) { navigator.share({text}).catch(() => {}); return; }
+  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast("คัดลอกลิงก์แล้ว ส่งให้เพื่อนได้เลย"))
+    .catch(() => { $("#dHint").textContent = link; });
+}
+// เรียกทุกเฟรมจอ: นับถอยหลัง, นาฬิกา, วาดโครงของเพื่อน
+function duelFrame() {
+  const now = performance.now(), c = $("#countdown"), pm = $("#pMode");
+  let label = "";
+  if (D.state === "countdown") { const n = Math.ceil((D.startT - now) / 1000); label = n > 3 ? "" : n >= 1 ? String(n) : "เริ่ม!";
+    if ($("#hTime").textContent !== `${Math.floor(D.view.seconds / 60)}:${String(D.view.seconds % 60).padStart(2, "0")}`) $("#hTime").textContent = `${Math.floor(D.view.seconds / 60)}:${String(D.view.seconds % 60).padStart(2, "0")}`; }
+  if (D.state === "live" && D.endT - now > (D.view.seconds - 0.7) * 1000) label = "เริ่ม!";
+  if (label !== D.label) {
+    D.label = label; c.textContent = label; c.style.display = label ? "flex" : "none";
+    if (label) say(label === "เริ่ม!" ? "เริ่ม" : label);
+  }
+  if (D.state === "live") {
+    const sec = Math.max(0, Math.ceil((D.endT - now) / 1000));
+    if (sec !== D.sec) {
+      D.sec = sec; pm.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+      $("#hTime").textContent = pm.textContent; $("#hTime").className = sec <= 10 ? "hot" : "";
+      pm.className = "pill big" + (sec <= 10 ? " hot" : "");
+      if (sec === 10) say("อีก 10 วินาที");
+    }
+  } else if (D.state === "lobby" || D.state === "countdown") { if (pm.textContent !== "ดวล · ห้อง " + D.code) { pm.textContent = "ดวล · ห้อง " + D.code; pm.className = "pill"; } }
+  // เพื่อน: โครงจากผลที่ CiRA ส่งมา (ไม่มีภาพจริงของเพื่อน)
+  const cv = $("#oppCanvas"), dpr = devicePixelRatio || 1, bw = cv.clientWidth, bh = cv.clientHeight;
+  if (!bw) return;
+  if (cv.width !== Math.round(bw * dpr) || cv.height !== Math.round(bh * dpr)) { cv.width = Math.round(bw * dpr); cv.height = Math.round(bh * dpr); }
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, bw, bh);
+  const o = D.opp, k = o && o.kps;
+  if (!k || !Object.keys(k).length) { D.oppDisp = {}; return; }
+  const ar = (o.w || 16) / (o.h || 9), s = Math.min(bw / ar, bh), vw = s * ar, vh = s, ox = (bw - vw) / 2, oy = (bh - vh) / 2;
+  for (const n in k) { const t = k[n], d = D.oppDisp[n]; D.oppDisp[n] = d ? [d[0] + (t[0] - d[0]) * .25, d[1] + (t[1] - d[1]) * .25, t[2]] : [...t]; }
+  const ok = n => D.oppDisp[n] && D.oppDisp[n][2] >= .4, P = n => [ox + D.oppDisp[n][0] * vw, oy + D.oppDisp[n][1] * vh];
+  g.lineWidth = 3; g.lineCap = "round"; g.strokeStyle = "#B9A8FF";
+  for (const [a, b] of SKEL) if (ok(a) && ok(b)) { g.beginPath(); g.moveTo(...P(a)); g.lineTo(...P(b)); g.stroke(); }
+  g.fillStyle = "#fff"; for (const n in D.oppDisp) if (ok(n)) { const [x, y] = P(n); g.beginPath(); g.arc(x, y, 3, 0, 7); g.fill(); }
+}
+// ครั้งใหม่จาก CiRA ในโหมดดวล: พูด/แสดงเฉพาะครั้งที่ทำระหว่างเวลาแข่ง
+function duelReps(r) {
+  for (let i = W.seen; i < r.rep_log.length; i++) {
+    if (D.state !== "live" || i < D.base) continue;
+    const rep = r.rep_log[i];
+    if (rep.ok) { const n = r.rep_log.slice(D.base, i + 1).filter(x => x.ok).length; say(String(n)); cue("+1 · " + n, true); $("#dMe").textContent = n;
+      $("#hCoinN").textContent = n; $("#hScMe").textContent = n; const c = $("#hCoin"); c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop"); }
+    else { const t = rep.issues.map(x => ISSUE_TH[x] || x).join(" · "); say("ไม่นับ " + t); cue("ไม่นับ: " + t, false); }
+  }
+  W.seen = r.rep_log.length;
+}
+async function leaveRoom() {
+  const code = D.code, sid = W.sid;
+  D.loopId++; endCamera(); W.sid = null; W.mode = "practice"; document.body.classList.remove("duelmode", "duel-play");
+  $("#countdown").style.display = "none";
+  if (sid) fetch(`/api/stream/${sid}/stop`, {method: "POST"}).catch(() => {});
+  if (code) await api(`/api/duel/${code}/leave`, {player: me});
+  D.code = null; go("duel");
+}
+async function duelDone(v) {
+  const code = D.code;
+  say("หมดเวลา"); sendHR(W.sid); endCamera(); W.sid = null;
+  $("#countdown").style.display = "none";
+  $("#resultBox").innerHTML = `<div class="card empty">หมดเวลา! กำลังสรุปผล…</div>`;
+  W.mode = "practice"; document.body.classList.remove("duelmode", "duel-play"); go("result");
+  for (let i = 0; i < 40; i++) {
+    const meP = v.players.find(p => p.me);
+    if (meP && meP.final) break;
+    await sleep(500);
+    const j = await api(`/api/duel/${code}?player=${encodeURIComponent(me)}`);
+    if (j.ok === false && !j.net) break;
+    if (j.ok !== false && j.round === v.round) v = j;
+  }
+  renderDuelResult(v); load(); watchRematch(code, v.round);
+}
+function renderDuelResult(v) {
+  const meP = v.players.find(p => p.me) || {name: me, score: 0, form: 0}, opp = v.players.find(p => !p.me), f = meP.final;
+  const won = v.winner === meP.name, draw = v.winner === "";
+  const title = v.winner == null ? "เพื่อนออกจากห้อง" : won ? "คุณชนะ!" : draw ? "เสมอ!" : "แพ้ไปนิดเดียว สู้ใหม่!";
+  if (v.winner != null) say(won ? "คุณชนะ" : draw ? "เสมอ" : "แพ้ไปนิดเดียว");
+  const side = (p, win) => `<div class="card ${win ? "win" : ""}"><span class="muted" style="font-size:13px">${p ? esc(p.name) : "-"}</span><b>${p ? p.score : 0}</b><small class="muted">คะแนนท่า ${p ? p.form : 0}</small></div>`;
+  $("#resultBox").innerHTML = `
+    <div style="text-align:center;display:flex;flex-direction:column;gap:4px"><span class="muted" style="font-size:13px">ดวล 1:1 · ${EX[v.exercise || "pushup"].name} ${v.seconds} วินาที</span>
+      <h1 style="font-size:32px;font-weight:600;color:${won ? "var(--accent)" : "var(--text)"}">${title}</h1>
+      ${v.by_form ? `<small class="muted">ทำได้เท่ากัน ตัดสินด้วยคะแนนท่าเฉลี่ย</small>` : ""}
+      ${meP.rp_delta != null ? `<span class="chip" style="align-self:center;margin-top:6px;${meP.rp_delta >= 0 ? "color:var(--good);border-color:#BFE3CC;background:#E7F6EC" : "color:var(--bad)"}">${rankImg(meP.rank && meP.rank.name, 18)} แต้มแรงค์ ${meP.rp_delta >= 0 ? "+" : ""}${meP.rp_delta} RP · ${esc(meP.rank ? meP.rank.name : "")}</span>` : ""}</div>
+    <div class="vsres">${side(meP, won)}<span class="num muted" style="font-size:18px">VS</span>${side(opp, opp && v.winner === opp.name)}</div>
+    <small class="muted" style="text-align:center">นับเฉพาะครั้งที่ทำถูกระหว่าง ${v.seconds} วินาที</small>
+    ${f && f.ok && !f.empty ? `${kcalCard(f)}<div class="card" style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="muted" style="font-size:13px">ได้รับ</span><b class="num" style="font-size:28px;color:var(--accent)">+${f.xp} EXP</b></div>
+      ${(f.detail || []).map(d => `<div style="display:flex;justify-content:space-between;font-size:14px"><span>${esc(d[0])}</span><span>+${d[1]}</span></div>`).join("")}
+      ${levelFoot(f)}</div>`
+      : `<div class="card empty">รอบนี้ไม่ได้ XP (ไม่มีครั้งที่ทำระหว่างเวลาแข่ง)</div>`}
+    <div class="tip" id="rematchHint" style="display:none"></div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px"><a class="btn" href="#/home">หน้าแรก</a>
+      <button class="btn primary" onclick="rematch('${v.code}')">แข่งอีกรอบ</button></div>`;
+}
+async function rematch(code) {
+  const j = await api(`/api/duel/${code}/rematch`, {player: me});
+  if (j.ok === false) { toast(j.error); return; }
+  enterRoom(j);
+}
+async function watchRematch(code, round) {
+  while (location.hash === "#/result" && !W.running) {
+    await sleep(2000);
+    const v = await api(`/api/duel/${code}?player=${encodeURIComponent(me)}`);
+    if (v.ok === false) return;
+    const opp = v.players.find(p => !p.me);
+    if (v.round > round && opp && $("#rematchHint")) { $("#rematchHint").textContent = `${opp.name} รออยู่ในห้องแล้ว กด แข่งอีกรอบ ได้เลย`; $("#rematchHint").style.display = "block"; }
+  }
+}
+
+// ================= สรุปผล =================
+function levelFoot(f) {   // ท้ายการ์ด EXP: เลเวล + เลเวลอัป
+  const L = f.level;
+  if (!L) return "";
+  return `${f.level_up ? `<div class="tip" style="color:var(--good);background:#E7F6EC">เลเวลอัป! ตอนนี้ ${lvTag(L.level)}</div>` : ""}
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px"><span>${lvTag(L.level)} ${fmt(f.total_xp)} EXP</span><span>อีก ${fmt(L.next_xp - f.total_xp)} EXP ถึง Lv.${L.level + 1}</span></div>
+    <div class="xbar"><i style="width:${Math.round(L.progress * 100)}%;background:var(--accent)"></i></div>`;
+}
+function kcalCard(f) {
+  if (f.kcal != null) return `<div class="card" style="display:flex;justify-content:space-between;align-items:baseline;padding:14px 18px"><span class="muted" style="font-size:13px">แคลอรี่ที่เผาผลาญ (โดยประมาณ)</span><b class="num" style="font-size:22px;font-weight:500">${f.kcal} kcal</b></div>`;
+  return f.has_weight === false ? `<a class="tip" href="#/me" onclick="setTimeout(openBody,50)">ใส่น้ำหนักในโปรไฟล์ เพื่อดูแคลอรี่ที่เผาผลาญ →</a>` : "";
+}
+// ฉากหลังของแต่ละสัตว์ (วาดเอง ถ้ามีรูปสัตว์ที่ผู้ใช้ทำใน Photoshop จะวางทับตรงกลาง)
+const SCENES = {
+  turtle:  {sky1: "#9FDDF0", sky2: "#E6F7FB", h1: "#7FD1C2", h2: "#4FB3A4", sun: "#FFF6C9", ink: "#14161A"},
+  panda:   {sky1: "#BFE6B0", sky2: "#EEF8E8", h1: "#8CCB7A", h2: "#5FA552", sun: "#FFFBE0", ink: "#14161A"},
+  cat:     {sky1: "#FFD3A8", sky2: "#FFF2E4", h1: "#F2B279", h2: "#D98C4E", sun: "#FFF1C9", ink: "#14161A"},
+  wolf:    {sky1: "#26335C", sky2: "#7E8FC4", h1: "#3B4A80", h2: "#1E2A4F", sun: "#F4F1DA", ink: "#FFFFFF"},
+  tiger:   {sky1: "#FF9E4A", sky2: "#FFE0B5", h1: "#E07B2C", h2: "#A9541B", sun: "#FFF0C2", ink: "#14161A"},
+  cheetah: {sky1: "#FFC94D", sky2: "#FFF0C4", h1: "#D9A441", h2: "#B07F22", sun: "#FFFFFF", ink: "#14161A"},
+  none:    {sky1: "#D9D0FF", sky2: "#F1EEFF", h1: "#B9A8FF", h2: "#9B86FF", sun: "#FFFFFF", ink: "#14161A"},
+};
+function heroHTML(f, mode) {
+  const a = f.animal, sc = SCENES[a ? a.key : "none"];
+  const scene = `<svg class="scene" viewBox="0 0 400 300" preserveAspectRatio="xMidYMin slice" aria-hidden="true">
+    <circle cx="${a && a.key === "wolf" ? 300 : 90}" cy="70" r="34" fill="${sc.sun}" opacity=".9"/>
+    <g fill="#fff" opacity="${a && a.key === "wolf" ? .15 : .7}"><ellipse cx="250" cy="60" rx="38" ry="12"/><ellipse cx="275" cy="52" rx="22" ry="12"/><ellipse cx="120" cy="120" rx="30" ry="9"/></g>
+    <path d="M0 150 Q70 112 140 132 T280 124 T400 136 V300 H0Z" fill="${sc.h1}"/>
+    <path d="M0 178 Q90 150 190 170 T400 164 V300 H0Z" fill="${sc.h2}"/></svg>`;
+  const beast = a ? `<div class="beast"><span>${a.emoji}</span><img src="/static/img/animal/${a.key}.png" alt="" onerror="this.remove()" onload="this.previousElementSibling.style.visibility='hidden'"></div>` : "";
+  return `<div class="hero${a ? "" : " short"}" style="--sky1:${sc.sky1};--sky2:${sc.sky2};--ink:${sc.ink}">${scene}<div class="fade"></div>
+    <div class="htop"><small>${mode === "follow" ? "มือใหม่" : "จบเซต"} · ${EX[W.ex].name}</small>${a ? `<span class="badge-an">ระดับ ${a.level}/6</span>` : ""}</div>
+    ${beast || '<div class="nobeast"></div>'}
+    <div class="hbottom">
+      ${a ? `<div class="hname">คุณแข็งแกร่งเท่า${esc(a.name)}!</div><small class="muted" style="margin-top:-6px">${esc(a.desc)}</small>` : ""}
+      <div class="ringbox"><svg width="138" height="138" viewBox="0 0 150 150" id="resRing" role="img" aria-label="คะแนนท่า ${f.form_score}"></svg></div>
+      <span class="muted" style="font-size:13px;margin-top:-4px">คะแนนท่า</span>
+      <div class="stats3"><div class="card"><b>${f.good}</b><small class="muted">ครั้งที่ถูก</small></div>
+        <div class="card"><b style="color:var(--bad)">${f.bad}</b><small class="muted">ยังไม่ผ่าน</small></div>
+        <div class="card"><b>${f.avg_tut}<small style="font-size:14px"> วิ</small></b><small class="muted">TUT เฉลี่ย</small></div></div>
+    </div></div>`;
+}
+function animalCard(a) {
+  if (!a) return "";
+  const tiers = ["🐢", "🐼", "🐈", "🐺", "🐅", "🐆"];
+  return `<div class="card" style="display:flex;flex-direction:column;gap:10px">
+    <span class="muted" style="font-size:13px">ระดับความแข็งแกร่ง (ช้า → เร็ว)</span>
+    <div class="tiers">${tiers.map((t, i) => `<span class="${i + 1 === a.level ? "on" : ""}">${t}</span>`).join("")}</div>
+    <small class="muted">ทำถูก ${a.pace} ครั้ง/นาที · ท่าดียิ่งได้คะแนนมาก = ${a.score} คะแนน${a.next ? ` · อีก ${a.next.need} คะแนนจะเป็น${esc(a.next.name)} ${a.next.emoji}` : " · ระดับสูงสุดแล้ว!"}</small></div>`;
+}
+function hrCard(f) {
+  if (!f.hr_avg) return "";
+  const maxHr = f.age ? 220 - f.age : null, pct = maxHr ? Math.round(100 * f.hr_avg / maxHr) : null;
+  const zone = pct == null ? "" : pct < 60 ? "โซน 1 เบามาก" : pct < 70 ? "โซน 2 เบา" : pct < 80 ? "โซน 3 ปานกลาง" : pct < 90 ? "โซน 4 หนัก" : "โซน 5 หนักมาก";
+  return `<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 18px">
+    <span><span class="muted" style="font-size:13px">หัวใจ (จากนาฬิกา)</span><br><b class="num" style="font-size:22px;font-weight:500;color:var(--bad)">♥ ${f.hr_avg}</b> <small class="muted">เฉลี่ย · สูงสุด ${f.hr_max} bpm</small></span>
+    ${pct ? `<span class="chip">${zone} (${pct}% ของชีพจรสูงสุดตามอายุ)</span>` : `<small class="muted">ใส่อายุในโปรไฟล์เพื่อดูโซน</small>`}</div>`;
+}
+function renderResult(f, log, lesson, mode) {
+  const box = $("#resultBox");
+  if (lesson && (!f || f.empty)) { box.innerHTML = ""; return; }
+  if (!f) { box.innerHTML = `<div class="card empty">บันทึกไม่ทัน CiRA ไม่ตอบกลับ<br>ลองเช็กว่า CiRA ยัง Run อยู่<br><a class="btn primary" href="#/setup" style="margin-top:12px">ลองใหม่</a></div>`; return; }
+  if (f.empty) { box.innerHTML = `<div class="card empty">ยังไม่ได้ทำสักครั้ง<br>ตั้งกล้องให้เห็นด้านข้างทั้งตัว แล้วลองใหม่<br><a class="btn primary" href="#/setup" style="margin-top:12px">ลองใหม่</a></div>`; return; }
+  if (!lesson) say(`จบเซต ทำได้ ${f.good} ครั้ง คะแนนท่า ${f.form_score}` + (f.animal ? ` ระดับของคุณคือ ${f.animal.name}` : ""));
+  const bad = log.filter(x => !x.ok);
+  box.innerHTML = `
+    ${heroHTML(f, mode)}
+    ${f.animal ? animalCard(f.animal) : f.animal_note === "old_cira" ? `<div class="tip">ระดับสัตว์จะขึ้นเมื่อ CiRA ใช้โค้ดใหม่: ใน CiRA กด Stop แล้ว Run ใหม่</div>` : ""}
+    ${log.length ? `<div class="card" style="display:flex;flex-direction:column;gap:10px"><span class="muted" style="font-size:13px">คะแนนรายครั้ง</span>
+      <div class="repbars">${log.map(x => `<i class="${x.ok ? "" : "bad"}" style="height:${x.ok ? Math.max(8, Math.round(70 * x.score / 100)) : 14}px" title="ครั้งที่ ${x.n}: ${x.ok ? x.score : "ไม่นับ"}"></i>`).join("")}</div>
+      ${bad.length ? `<small class="muted">ไม่นับ ${bad.length} ครั้ง: ${bad.map(x => "ครั้งที่ " + x.n + " (" + x.issues.map(i => ISSUE_TH[i] || i).join(", ") + ")").join(" · ")}</small>` : ""}</div>` : ""}
+    <div class="card" style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="muted" style="font-size:13px">ได้รับ</span><b class="num" style="font-size:28px;color:var(--accent)">+${f.xp} EXP</b></div>
+      ${(f.detail || []).map(d => `<div style="display:flex;justify-content:space-between;font-size:14px"><span>${esc(d[0])}</span><span>+${d[1]}</span></div>`).join("")}
+      ${levelFoot(f)}</div>
+    ${hrCard(f)}${kcalCard(f)}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="muted" style="font-size:12px">กล้ามเนื้อที่ได้ฝึก</span>${EX[W.ex].chips.map(c => `<span class="chip">${c}</span>`).join("")}</div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px"><a class="btn" href="#/home">หน้าแรก</a><a class="btn primary" href="#/setup">ฝึกอีกเซต</a></div>`;
+  ring($("#resRing"), f.form_score / 100, f.form_score, 150, 12);
+}
+
+// ================= เกมเลนท่าทาง =================
+// การ์ดท่าไหลลงมา 3 เลน ; ตรวจท่า/ตำแหน่งที่ CiRA (game.py) ตัดสินที่ HUB (/api/game/<sid>/judge) — เว็บแค่แสดงผล
+// ภาพแสดงแบบกระจก: เลนซ้ายของจอ = ขวาของภาพจริง (คนยืนหันหน้าเข้ากล้อง ขยับไปทางซ้ายตัวเอง = ซ้ายของจอ)
+const GPOSE = {
+  up:    {th: "ชูมือ",      color: "#7C5CFF"},
+  t:     {th: "กางแขน",     color: "#18A0A0"},
+  hips:  {th: "มือเท้าเอว",  color: "#E38B2C"},
+  squat: {th: "สควอท",      color: "#E5484D"},
+};
+const LANE_IMG = ["R", "C", "L"], LANE_TH = ["ซ้าย", "กลาง", "ขวา"];
+const G_SECONDS = 60, G_FALL = 4.2, G_HIT = 0.76;   // G_FALL = วินาทีจากโผล่จนถึงเส้น (เส้น = หมดเวลาของการ์ดใบนั้น)
+const G = {running: false, mode: "", sid: null, code: null, cards: [], t0: 0, phase: "", res: null, disp: {}, stream: null, poll: 0, imgN: 0, judgeQ: 0, fullSince: 0, ended: false};
+function poseFig(p) {     // รูปท่าบนการ์ด: ถ้ามีรูปที่ทำเอง (img/game/<ท่า>.png) จะใช้รูปนั้น
+  const L = {
+    up:    "M40 30 L28 6 M40 30 L52 6",
+    t:     "M40 32 L14 32 M40 32 L66 32",
+    hips:  "M40 32 L28 42 L36 52 M40 32 L52 42 L44 52",
+    squat: "M40 32 L22 40 M40 32 L58 40",
+  }[p];
+  const body = p === "squat" ? "M40 26 L40 50 M40 50 L28 58 L30 74 M40 50 L52 58 L50 74" : "M40 26 L40 54 M40 54 L32 76 M40 54 L48 76";
+  const head = p === "squat" ? 19 : 18;
+  return `<svg viewBox="0 0 80 80"><g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><circle cx="40" cy="${head - 4}" r="7" fill="#fff"/><path d="${body}"/><path d="${L}"/></g></svg>`;
+}
+const GIMG_MISS = {};
+function poseCardInner(p) {
+  if (GIMG_MISS[p]) return poseFig(p) + `<span>${GPOSE[p].th}</span>`;
+  return `<img src="/static/img/game/${p}.png" alt="" onerror="GIMG_MISS['${p}']=1;this.outerHTML=poseFig('${p}')"><span>${GPOSE[p].th}</span>`;
+}
+function prepGame() {
+  if (G.running) return;
+  $("#gPoses").innerHTML = Object.entries(GPOSE).map(([k, v]) => `<span class="chip" style="display:inline-flex;align-items:center;gap:6px"><i style="width:10px;height:10px;border-radius:50%;background:${v.color}"></i>${v.th}</span>`).join("");
+  ["#gMenu", "#gJoin"].forEach(x => $(x).style.display = "flex"); $("#gPair").style.display = "none"; $("#gStage").style.display = "none";
+  showGameBest();
+}
+async function showGameBest() {
+  if (!token) return;
+  const j = await api("/api/game/best");
+  const b = $("#gBest");
+  if (!j.ok || !j.best) { b.style.display = "none"; return; }
+  b.style.display = "block";
+  b.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:baseline"><span class="muted" style="font-size:13px">สถิติดีที่สุดของคุณ</span><b class="num" style="font-size:24px;font-weight:500">${fmt(j.best.score)}</b></div>
+    <small class="muted">เล่นแล้ว ${j.plays} ครั้ง · คอมโบสูงสุด ${j.best.best_combo}</small>`;
+}
+function gameShowStage(on) {
+  ["#gMenu", "#gJoin"].forEach(x => $(x).style.display = on ? "none" : "flex"); $("#gPair").style.display = "none";
+  $("#gStage").style.display = on ? "block" : "none";
+  document.body.classList.toggle("full", on);
+}
+// ---------- ส่งภาพจากกล้องไป HUB (ใช้ทั้งเล่นบนเครื่องนี้ และมือถือที่เป็นกล้องให้จอใหญ่) ----------
+async function framePump(v, st) {
+  const cap = document.createElement("canvas"); let lvl = 0, rtt = 0;
+  while (st.alive()) {
+    const t0 = performance.now();
+    if (st.sid && v.videoWidth) {
+      try {
+        const n = NET[lvl];
+        cap.width = n.w; cap.height = Math.round(n.w * v.videoHeight / v.videoWidth);
+        cap.getContext("2d").drawImage(v, 0, 0, cap.width, cap.height);
+        const blob = await new Promise(res => cap.toBlob(res, "image/jpeg", n.q));
+        const ts = performance.now(), sid = st.sid;
+        const j = await (await fetch(`/api/stream/${sid}/frame`, {method: "POST", body: blob, headers: {"Content-Type": "image/jpeg", "X-Capture-Ms": String(Date.now())}})).json();
+        const r = performance.now() - ts; rtt = rtt ? 0.8 * rtt + 0.2 * r : r;
+        lvl = rtt > 450 ? 2 : rtt > 250 ? Math.max(lvl, 1) : rtt < 160 ? 0 : lvl;
+        if (st.sid === sid) {
+          if (j.ok === false || (j.status && j.status !== "active")) { st.sid = null; st.onEnd && st.onEnd(); }
+          else st.onJson && st.onJson(j);
+        }
+      } catch (e) { st.onErr && st.onErr(e); }
+    }
+    await sleep(Math.max(30, 1000 / NET[lvl].fps - (performance.now() - t0)));
+  }
+}
+async function camOpen(v, face) {
+  const s = await navigator.mediaDevices.getUserMedia({audio: false, video: {width: {ideal: 1280}, height: {ideal: 720}, facingMode: face}});
+  v.srcObject = s; await v.play().catch(() => {}); return s;
+}
+// ---------- เล่นบนเครื่องนี้ ----------
+async function gameLocal() {
+  if (!token) { showAuth(); return; }
+  $("#gErr").textContent = "";
+  if (!window.isSecureContext) { $("#gErr").textContent = "ต้องเปิดผ่านลิงก์ https เพื่อใช้กล้อง"; return; }
+  try { G.stream = await camOpen($("#gVid"), store.get("coach_game_facing", "user")); }
+  catch (e) { $("#gErr").textContent = "เปิดกล้องไม่ได้: " + e.message; return; }
+  const j = await api("/api/stream/start", {exercise: "game"});
+  if (j.ok === false) { G.stream.getTracks().forEach(t => t.stop()); $("#gErr").textContent = j.error; return; }
+  Object.assign(G, {running: true, mode: "local", sid: j.id, res: null, disp: {}});
+  $("#gVid").style.display = ""; $("#gImg").style.display = "none"; $("#gFlip").style.display = "";
+  gameShowStage(true); gameReady();
+  framePump($("#gVid"), G.pumpSt = {sid: j.id, alive: () => G.running && G.mode === "local", onJson: x => gameRes(x),
+    onEnd: () => { if (G.phase !== "end") gameMsg("การเชื่อมต่อหลุด"); }});
+  requestAnimationFrame(gameDraw);
+}
+async function gameFlip() {
+  if (G.mode !== "local") return;
+  const f = store.get("coach_game_facing", "user") === "user" ? "environment" : "user"; store.set("coach_game_facing", f);
+  try { const ns = await camOpen($("#gVid"), f); G.stream.getTracks().forEach(t => t.stop()); G.stream = ns; } catch (e) { toast("สลับกล้องไม่ได้"); }
+}
+// ---------- จอใหญ่ + มือถือ ----------
+function pairBase() {
+  const loc = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+  return loc && streams.public_url ? streams.public_url.replace(/\/$/, "") : location.origin;
+}
+async function gamePair() {
+  if (!token) { showAuth(); return; }
+  $("#gErr").textContent = "";
+  const j = await api("/api/pair/create", {});
+  if (!j.ok) { $("#gErr").textContent = j.error || "สร้างรหัสไม่ได้"; return; }
+  Object.assign(G, {running: true, mode: "pair", code: j.code, sid: null, res: null, disp: {}});
+  const link = `${pairBase()}/#/cam?pair=${j.code}`;
+  $("#gCode").textContent = j.code; $("#gPairLink").textContent = link;
+  try { const q = qrcode(0, "M"); q.addData(link); q.make(); $("#gQr").innerHTML = q.createImgTag(6, 8); } catch (e) { $("#gQr").textContent = ""; }
+  if (/^(127\.0\.0\.1|localhost)$/.test(location.hostname) && !streams.public_url)
+    $("#gPairLink").textContent = "ยังไม่มีลิงก์ออนไลน์ — เปิด start_online.bat ก่อน หรือให้มือถือเปิดเว็บด้วยลิงก์ https เดียวกับเพื่อน แล้วใส่รหัส";
+  ["#gMenu", "#gJoin"].forEach(x => $(x).style.display = "none"); $("#gPair").style.display = "flex";
+  document.body.classList.add("full");
+  pairWait();
+}
+async function pairWait() {
+  const code = G.code;
+  while (G.running && G.mode === "pair" && G.code === code && !G.sid) {
+    const p = await api(`/api/pair/${code}`);
+    if (p.ok === false && !p.net) { gameQuit(); toast(p.error); return; }
+    $("#gPairSt").textContent = p.sid ? "เชื่อมต่อแล้ว!" : p.phone ? "มือถือเชื่อมต่อแล้ว กำลังเริ่ม…" : "รอมือถือเชื่อมต่อ…";
+    if (p.sid) {
+      G.sid = p.sid; $("#gVid").style.display = "none"; $("#gImg").style.display = ""; $("#gFlip").style.display = "none";
+      gameShowStage(true); gameReady(); pairPoll(); pairImg(); requestAnimationFrame(gameDraw); return;
+    }
+    await sleep(1000);
+  }
+}
+async function pairPoll() {         // ผลจาก CiRA ของภาพที่มือถือส่งมา
+  const sid = G.sid;
+  while (G.running && G.sid === sid) {
+    const t0 = performance.now();
+    try {
+      const j = await (await fetch(`/api/stream/${sid}`, {cache: "no-store"})).json();
+      if (j.ok === false || (j.status && j.status !== "active")) { if (G.phase !== "end") gameMsg("มือถือหยุดส่งภาพ"); break; }
+      gameRes(j);
+    } catch (e) {}
+    await sleep(Math.max(40, 100 - (performance.now() - t0)));
+  }
+}
+function pairImg() {               // ภาพจากกล้องมือถือ (ดึงรูปล่าสุดต่อกันไปเรื่อย ๆ)
+  const im = $("#gImg"), sid = G.sid;
+  im.onload = im.onerror = () => { if (G.running && G.sid === sid) setTimeout(() => { im.src = `/api/stream/${sid}/frame.jpg?t=${token}&n=${++G.imgN}`; }, 60); };
+  im.src = `/api/stream/${sid}/frame.jpg?t=${token}&n=${++G.imgN}`;
+}
+// ---------- ตัวเกม ----------
+function gameMsg(t) { $("#gMsg").textContent = t; }
+function gameRes(j) {
+  const r = j.result; if (!r || (G.res && r.seq === G.res.seq)) return;
+  G.res = r;
+  if (ciraOld(r) || r.exercise !== "game") { gameMsg("CiRA ยังเป็นโค้ดเก่า\nให้กด Stop แล้ว Run ใน CiRA CORE ใหม่"); return; }
+  const m = r.metrics || {}, idx = LANE_IMG.indexOf(m.lane);
+  document.querySelectorAll("#gLanes div").forEach((d, i) => d.classList.toggle("me", i === idx));
+  if (idx >= 0) $("#gYou").style.left = (idx * 33.333) + "%";
+  $("#gYouT").textContent = m.pose && GPOSE[m.pose] ? "คุณ · " + GPOSE[m.pose].th : "คุณ";
+  // การ์ดใบที่มาก่อน: ทำท่าตรงเลนเมื่อไหร่ก็ได้คะแนนทันที ไม่ต้องรอถึงเส้น (HUB ตรวจซ้ำจากผลของ CiRA)
+  const k = G.phase === "play" && gameFront();
+  if (k && !k.trying && m.lane === LANE_IMG[k.lane] && m.pose === k.pose) gameJudge(k, false);
+  if (G.phase === "wait") {
+    const okNow = r.kps && Object.keys(r.kps).length && r.full !== false;
+    if (!okNow) { G.fullSince = 0; gameMsg(!r.kps || !Object.keys(r.kps).length ? "ยืนให้กล้องเห็นตัว\n(ถอยห่าง 2–3 เมตร)" : "ถอยออกอีกนิด\nให้เห็นตั้งแต่หัวถึงเท้า"); }
+    else if (!G.fullSince) G.fullSince = performance.now();
+    else if (performance.now() - G.fullSince > 800) gameCountdown();
+  }
+}
+function gameReady() {
+  Object.assign(G, {phase: "wait", cards: [], fullSince: 0, ended: false, score: 0, combo: 0});
+  $("#gCards").innerHTML = ""; $("#gEnd").style.display = "none"; $("#gScore").textContent = "0"; $("#gTime").textContent = G_SECONDS; $("#gCombo").style.display = "none";
+  gameMsg("ยืนให้กล้องเห็นตัว\n(ถอยห่าง 2–3 เมตร)"); say("ยืนให้กล้องเห็นทั้งตัว");
+}
+async function gameCountdown() {
+  G.phase = "count";
+  for (const n of ["3", "2", "1"]) { if (!G.running) return; gameMsg(n); say(n); await sleep(900); }
+  if (!G.running) return;
+  gameMsg("เริ่ม!"); say("เริ่ม"); setTimeout(() => { if (G.phase === "play") gameMsg(""); }, 700);
+  G.cards = gameSchedule(); G.t0 = performance.now(); G.phase = "play";
+}
+function gameFront() {        // การ์ดที่โผล่มาแล้ว และยังไม่ได้ตัดสิน ใบที่มาก่อนสุด
+  const t = (performance.now() - G.t0) / 1000;
+  return G.cards.find(k => !k.judged && t >= k.spawn) || null;
+}
+function gameSchedule() {          // ช่วงแรกช้า แล้วค่อย ๆ เร็วขึ้น ; สควอทไม่เกิน ~1 ใน 4
+  const out = []; let t = 2.0, last = null, n = 0;
+  const poses = ["up", "t", "hips", "up", "t", "hips", "squat"];
+  while (t + G_FALL < G_SECONDS - 1) {
+    let lane, pose;
+    do { lane = Math.floor(Math.random() * 3); pose = poses[Math.floor(Math.random() * poses.length)]; }
+    while (last && ((lane === last.lane && pose === last.pose) || (pose === "squat" && last.pose === "squat")));
+    out.push(last = {id: "c" + (n++), lane, pose, spawn: t, hit: t + G_FALL, el: null, said: false, judged: false});
+    t += Math.max(1.8, 3.0 - t * 0.022) + (pose === "squat" ? 0.4 : 0);
+  }
+  return out;
+}
+function gameDraw() {
+  if (!G.running) return;
+  const st = $("#gStage"), src = G.mode === "local" ? $("#gVid") : $("#gImg"), sw = src.videoWidth || src.naturalWidth, sh = src.videoHeight || src.naturalHeight;
+  if (sw && sh) {      // กล่องขนาดเท่าภาพจริง (ไม่ตัดขอบ) เลน 3 ช่องจะตรงกับที่ CiRA แบ่งในภาพพอดี
+    const k = Math.min(st.clientWidth / sw, st.clientHeight / sh), bw = Math.round(sw * k), bh = Math.round(sh * k), b = $("#gBox").style;
+    if (b.width !== bw + "px" || b.height !== bh + "px") Object.assign(b, {width: bw + "px", height: bh + "px", left: Math.round((st.clientWidth - bw) / 2) + "px", top: Math.round((st.clientHeight - bh) / 2) + "px"});
+  }
+  const H = $("#gBox").clientHeight, W2 = $("#gBox").clientWidth;
+  // โครงร่าง (กลับด้านแบบกระจกให้ตรงกับภาพ)
+  const c = $("#gOver"), dpr = devicePixelRatio || 1;
+  if (c.width !== Math.round(W2 * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(W2 * dpr); c.height = Math.round(H * dpr); }
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W2, H);
+  const tgt = G.res && G.res.kps;
+  if (tgt && sw) {
+    const vw = W2, vh = H, ox = 0, oy = 0;
+    for (const n in tgt) { const t = tgt[n], d = G.disp[n]; G.disp[n] = d ? [d[0] + (t[0] - d[0]) * .4, d[1] + (t[1] - d[1]) * .4, t[2]] : [...t]; }
+    for (const n in G.disp) if (!tgt[n]) delete G.disp[n];
+    const ok = n => G.disp[n] && G.disp[n][2] >= .4, P = n => [W2 - (ox + G.disp[n][0] * vw), oy + G.disp[n][1] * vh];
+    g.lineWidth = 5; g.lineCap = "round"; g.strokeStyle = "rgba(255,255,255,.7)";
+    for (const [a, b] of SKEL) { if (!ok(a) || !ok(b)) continue; g.beginPath(); g.moveTo(...P(a)); g.lineTo(...P(b)); g.stroke(); }
+  } else G.disp = {};
+  if (G.phase === "play") {
+    const t = (performance.now() - G.t0) / 1000, left = Math.max(0, Math.ceil(G_SECONDS - t));
+    $("#gTime").textContent = left;
+    const cw = Math.min(W2 * 0.24, H * 0.26);
+    for (const k of G.cards) {
+      if (t < k.spawn || k.gone) continue;
+      if (!k.el) { k.el = document.createElement("div"); k.el.className = "gcard"; k.el.style.background = GPOSE[k.pose].color; k.el.style.left = ((k.lane + 0.5) * W2 / 3 - cw / 2) + "px"; k.el.style.width = cw + "px"; k.el.innerHTML = poseCardInner(k.pose); $("#gCards").appendChild(k.el); }
+      const y = (t - k.spawn) / G_FALL * (H * G_HIT) - cw / 2;
+      if (!k.judged) { const tf = `translateY(${y}px)`; k.el.style.transform = tf; k.el.style.setProperty("--tf", tf); }
+      if (!k.judged && t > k.hit + 0.15) gameJudge(k, true);      // ถึงเส้นแล้วยังไม่ได้ = ตัดสินรอบสุดท้าย
+      if (k.el && !k.hitAt && t > k.hit + 1.4) { k.el.remove(); k.el = null; k.gone = true; }
+    }
+    const f = gameFront();
+    G.cards.forEach(k => k.el && k.el.classList.toggle("act", k === f));
+    if (f && !f.said) { f.said = true; say(`${LANE_TH[f.lane]} ${GPOSE[f.pose].th}`); }
+    G.cards = G.cards.filter(k => !k.gone);
+    if (t >= G_SECONDS && !G.ended) { G.ended = true; gameFinish(); }
+  }
+  requestAnimationFrame(gameDraw);
+}
+async function gameJudge(k, final) {
+  if (final) k.judged = true; else k.trying = true;
+  const j = await api(`/api/game/${G.sid}/judge`, {id: k.id, lane: LANE_IMG[k.lane], pose: k.pose, final});
+  if (!j.ok) { k.trying = false; return; }
+  if (j.pending) { setTimeout(() => { k.trying = false; }, 150); return; }   // ยังไม่ชัวร์ ลองใหม่เฟรมถัดไป
+  if (j.dup) return;
+  k.judged = true;
+  if (k.el) {
+    k.el.classList.remove("act"); k.el.classList.add(j.hit ? "hit" : "miss");
+    if (j.hit) { k.hitAt = performance.now(); const el = k.el; setTimeout(() => { el.remove(); }, 460); k.el = null; k.gone = true; }
+  }
+  const fx = document.createElement("div"); fx.className = "gfx";
+  fx.style.left = ((k.lane + 0.5) * 33.333 - 6) + "%"; fx.style.top = `calc(${G_HIT * 100}% - 60px)`;
+  fx.textContent = j.hit ? (j.combo > 1 ? `+${100 + 10 * Math.min(j.combo - 1, 10)} คอมโบ ${j.combo}` : "+100") : !j.lane_ok ? "ผิดเลน" : "ท่ายังไม่ตรง";
+  $("#gBox").appendChild(fx); setTimeout(() => fx.remove(), 900);
+  if (j.hit) cueSound();
+  $("#gScore").textContent = fmt(j.score);
+  const cb = $("#gCombo"); cb.style.display = j.combo > 1 ? "" : "none"; cb.textContent = "คอมโบ " + j.combo;
+}
+let actx = null;
+function cueSound() {       // เสียง "ติ๊ง" สั้น ๆ ตอนทำถูก (ไม่ต้องใช้ไฟล์เสียง)
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+    o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(1320, t + 0.08);
+    g.gain.setValueAtTime(0.15, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + 0.2);
+  } catch (e) {}
+}
+async function gameFinish() {
+  G.phase = "end"; gameMsg(""); say("หมดเวลา");
+  await sleep(600);
+  const f = await api(`/api/game/${G.sid}/finish`, {});
+  $("#gEnd").style.display = "flex";
+  if (!f.ok) { $("#gEndCard").innerHTML = `<h2>บันทึกไม่ได้</h2><p class="muted">${esc(f.error || "")}</p><button class="btn" onclick="gameQuit()">ออก</button>`; return; }
+  say(`ได้ ${f.score} คะแนน ทำถูก ${f.hits} ท่า` + (f.new_record ? " สถิติใหม่" : ""));
+  $("#gEndCard").innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline"><h2 style="font-size:20px">จบเกม</h2>${f.new_record ? `<span class="chip" style="background:#FFF4E0;color:#B5650D">สถิติใหม่!</span>` : ""}</div>
+    <b class="num" style="font-size:52px;font-weight:600;line-height:1">${fmt(f.score)}</b>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
+      <div><b class="num" style="font-size:22px">${f.hits}/${f.hits + f.miss}</b><br><small class="muted">ทำถูก</small></div>
+      <div><b class="num" style="font-size:22px">${f.accuracy}%</b><br><small class="muted">แม่นยำ</small></div>
+      <div><b class="num" style="font-size:22px">${f.best_combo || 0}</b><br><small class="muted">คอมโบสูงสุด</small></div></div>
+    <div style="display:flex;justify-content:space-between"><span>+${fmt(f.xp)} EXP</span><span style="color:var(--accent)">+${f.rp_gain || 0} RP ${f.rank ? "· " + esc(f.rank.name || "") : ""}</span></div>
+    ${levelFoot(f)}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn" onclick="gameQuit()">ออก</button><button class="btn primary" onclick="gameAgain()">เล่นอีกครั้ง</button></div>`;
+}
+async function gameAgain() {
+  $("#gEnd").style.display = "none";
+  if (G.mode === "local") {
+    const j = await api("/api/stream/start", {exercise: "game"});
+    if (j.ok === false) { toast(j.error); return; }
+    G.sid = G.pumpSt.sid = j.id; G.res = null; gameReady();
+  } else {
+    await api(`/api/pair/${G.code}/again`, {});
+    G.sid = null; G.res = null; gameMsg("รอมือถือเริ่มส่งภาพ…");
+    $("#gCards").innerHTML = "";
+    (async () => { const code = G.code;
+      while (G.running && G.code === code && !G.sid) { const p = await api(`/api/pair/${code}`); if (p.sid) { G.sid = p.sid; gameReady(); pairPoll(); pairImg(); } else await sleep(800); } })();
+  }
+}
+function gameQuit() {
+  const sid = G.sid;
+  if (sid && G.phase !== "end") fetch(`/api/stream/${sid}/stop`, {method: "POST"}).catch(() => {});
+  if (G.stream) G.stream.getTracks().forEach(t => t.stop());
+  Object.assign(G, {running: false, sid: null, stream: null, phase: "", code: null});
+  $("#gCards").innerHTML = ""; try { speechSynthesis.cancel(); } catch (e) {}
+  document.body.classList.remove("full"); prepGame();
+}
+// ---------- หน้ามือถือที่เป็นกล้องให้จอใหญ่ (#/cam?pair=รหัส) — ไม่ต้องล็อกอิน ----------
+const CAM = {on: false, code: null, sid: null, stream: null, face: "user", st: null};
+async function camStart(code) {
+  if (CAM.on) return;
+  if (!code || !/^\d{4}$/.test(code)) { $("#cMsg").textContent = "รหัสไม่ถูกต้อง"; return; }
+  CAM.on = true; CAM.code = code; CAM.face = store.get("coach_cam_face", "user");
+  $("#cCode").textContent = "รหัส " + code;
+  if (!window.isSecureContext) { $("#cMsg").textContent = "ต้องเปิดผ่านลิงก์ https\n(สแกน QR บนจอใหญ่)"; CAM.on = false; return; }
+  try { CAM.stream = await camOpen($("#cVid"), CAM.face); } catch (e) { $("#cMsg").textContent = "เปิดกล้องไม่ได้\n" + e.message; CAM.on = false; return; }
+  try { await navigator.wakeLock?.request("screen"); } catch (e) {}
+  CAM.st = {sid: null, alive: () => CAM.on, onJson: j => { const r = j.result;
+      $("#cMsg").textContent = !j.cira_online ? "CiRA ยังไม่ทำงาน" : !r ? "กำลังส่งภาพ…" : (!r.kps || !Object.keys(r.kps).length) ? "ยังไม่เห็นคน\nตั้งมือถือให้เห็นทั้งตัว" : r.full === false ? "ถอยอีกนิด ให้เห็นทั้งตัว" : "เชื่อมต่อแล้ว ✓\nดูเกมที่จอใหญ่ได้เลย"; },
+    onEnd: () => { CAM.sid = null; $("#cMsg").textContent = "จบเกมแล้ว\nรอจอใหญ่กด เล่นอีกครั้ง"; }};
+  framePump($("#cVid"), CAM.st);
+  while (CAM.on && CAM.code === code) {           // บอกจอใหญ่ว่ายังอยู่ + เริ่มรอบใหม่เมื่อจอใหญ่ขอ
+    const p = await api(`/api/pair/${code}/ping`, {});
+    if (p.ok === false && !p.net) { $("#cMsg").textContent = p.error || "รหัสหมดอายุ"; camStop(true); return; }
+    if (p.ok && p.want && !CAM.sid) {
+      const s = await api(`/api/pair/${code}/start`, {exercise: "game"});
+      if (s.ok) { CAM.sid = CAM.st.sid = s.id; $("#cMsg").textContent = `เชื่อมต่อกับจอของ ${s.player} แล้ว`; }
+      else $("#cMsg").textContent = s.error || "เริ่มไม่ได้";
+    }
+    if (p.ok && !p.active && CAM.sid && !p.want) { CAM.sid = CAM.st.sid = null; $("#cMsg").textContent = "จบเกมแล้ว\nรอจอใหญ่กด เล่นอีกครั้ง"; }
+    await sleep(2000);
+  }
+}
+async function camFlip() {
+  CAM.face = CAM.face === "user" ? "environment" : "user"; store.set("coach_cam_face", CAM.face);
+  try { const ns = await camOpen($("#cVid"), CAM.face); if (CAM.stream) CAM.stream.getTracks().forEach(t => t.stop()); CAM.stream = ns; }
+  catch (e) { toast("สลับกล้องไม่ได้"); }
+  $("#cVid").style.transform = CAM.face === "user" ? "scaleX(-1)" : "none";
+}
+function camStop(silent) {
+  if (CAM.sid) fetch(`/api/stream/${CAM.sid}/stop`, {method: "POST"}).catch(() => {});
+  if (CAM.stream) CAM.stream.getTracks().forEach(t => t.stop());
+  Object.assign(CAM, {on: false, sid: null, stream: null, code: null});
+  if (!silent) go("game");
+}
+
+// ================= เริ่ม =================
+renderMuscle(); route(); load(); loadStreams();
+initAuth();
+setInterval(() => { const r = location.hash; if (!W.running && (r === "" || /home|rank|me/.test(r))) load(); }, 4000);
+setInterval(loadStreams, 3000);
+</script>
+</body>
+</html>

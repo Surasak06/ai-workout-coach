@@ -1,0 +1,6 @@
+opencv-python
+ultralytics      # YOLO pose ใช้ทดสอบระหว่างยังไม่ได้เชื่อม CiRA CORE
+pyserial         # คุยกับ ESP32
+pyttsx3          # เสียงพูด (ออฟไลน์)
+matplotlib       # dashboard.py
+gspread          # (ไม่บังคับ) ส่งสถิติขึ้น Google Sheets
