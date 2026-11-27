@@ -14,6 +14,7 @@ AI Workout Coach - HUB (ศูนย์กลางคะแนน)
 import hashlib
 from collections import deque
 import json
+import math
 import os
 import secrets
 import random
@@ -36,6 +37,8 @@ CONTROL_TUT = (2.0, 4.0)    # ช่วง TUT ที่ถือว่าคุ
 XP_PERFECT_SET = 20         # ทั้งเซตทำถูก >= 90% และอย่างน้อย 5 ครั้ง
 DAILY_GOAL = 30             # เป้าหมายรายวัน (ครั้งที่ทำถูก)
 XP_DAILY_GOAL = 50          # โบนัสเมื่อถึงเป้าวันนั้นครั้งแรก
+KCAL_GOAL = 30              # วงแหวนหน้าแรก: เป้าแคลอรี่ต่อวัน (kcal)
+MINUTES_GOAL = 5            # วงแหวนหน้าแรก: เป้าเวลาออกแรงต่อวัน (นาที นับเฉพาะช่วงทำท่า)
 
 # ---- 2 ระบบแยกกัน ----
 # 1) เลเวล (Lv.) มาจาก EXP ที่ได้ตอนฝึก/เล่นเกม : Lv.n ต้องใช้ EXP เพิ่ม 100 x n  (Lv2=100, Lv3=300, Lv4=600, Lv5=1000 ...)
@@ -50,11 +53,18 @@ RANKS = [                   # (ชื่อแรงค์, RP ขั้นต�
 RP_WIN, RP_DRAW, RP_LOSS = 25, 5, -15      # ดวล
 RP_GAME_MAX = 20                           # เกม: ได้สูงสุดต่อรอบ
 
-EXERCISE_NAMES = {"pushup": "วิดพื้น", "squat": "สควอท", "plank": "แพลงก์", "game": "เกมเลนท่าทาง"}
+EXERCISE_NAMES = {"pushup": "วิดพื้น", "squat": "สควอท", "plank": "แพลงก์", "lunge": "ลันจ์", "jumpingjack": "กระโดดตบ", "game": "เกม"}
+# แพลงก์นับเป็นวินาที: good = จำนวนวินาที -> แปลงเป็น "ครั้งเทียบเท่า" 3 วินาที = 1 ครั้ง (ใช้กับ EXP / เป้ารายวัน / กล้ามเนื้อ)
+SECONDS_PER_REP = {"plank": 3}
+
+
+def rep_units(exercise, good):
+    return good // SECONDS_PER_REP[exercise] if exercise in SECONDS_PER_REP else good
 # ท่าไหนฝึกกล้ามเนื้ออะไร (น้ำหนัก 0-1) ใช้ทำแผนที่กล้ามเนื้อรายสัปดาห์
 # ค่า MET จาก 2024 Adult Compendium of Physical Activities
 #   02020 calisthenics (pushups ...) vigorous = 7.5 ; 02052 resistance training, squats = 5.0
-MET = {"pushup": 7.5, "squat": 5.0, "plank": 2.8}
+MET = {"pushup": 7.5, "squat": 5.0, "plank": 3.8, "lunge": 4.0, "jumpingjack": 7.7, "game": 5.0}
+GAME_SECONDS = 60
 # ระดับสัตว์: คะแนน = จำนวนครั้งที่ทำถูกต่อนาที (สูงสุด 30) x (คะแนนท่า / 100)^2  ทำเร็วแต่ท่าเสียก็ไม่ได้สัตว์ระดับสูง
 ANIMALS = [  # (key, ชื่อ, คำอธิบาย, emoji, คะแนนขั้นต่ำ)
     ("turtle", "เต่า", "ช้าแต่มั่นคง ค่อย ๆ เพิ่มจังหวะได้", "🐢", 0),
@@ -70,8 +80,8 @@ def animal_of(s):
     """คืนระดับสัตว์ของเซตนี้ (ต้องมีอย่างน้อย 3 ครั้ง)"""
     reps = s.get("reps") or []
     timed = [r for r in reps if r.get("t1") and r.get("t0") is not None]
-    if s["attempts"] < 3 or len(timed) < 3:
-        return None
+    if s["attempts"] < 3 or len(timed) < 3 or s.get("exercise") in ("plank", "jumpingjack"):
+        return None          # แพลงก์ (ท่าค้าง) / กระโดดตบ (เร็วโดยธรรมชาติ) ไม่ใช้ระดับความเร็ว
     minutes = max(1e-6, (timed[-1]["t1"] - timed[0]["t0"]) / 60)
     pace = s["good"] / minutes
     # เร็วเกิน 30 ครั้ง/นาที ไม่ได้คะแนนเพิ่ม (ไม่ใช่การควบคุมท่า) และท่าไม่ดีถูกลดหนักขึ้น (ยกกำลังสอง)
@@ -89,7 +99,9 @@ LEVEL_NAMES = {"beginner": "มือใหม่", "intermediate": "ปาน�
 EXERCISE_MUSCLES = {
     "pushup": {"chest": 1.0, "triceps": 0.7, "shoulders": 0.6, "abs": 0.3},
     "squat": {"quads": 1.0, "glutes": 0.8, "hams": 0.4},
-    "plank": {"abs": 1.0, "shoulders": 0.3},
+    "plank": {"abs": 1.0, "obliques": 0.5, "shoulders": 0.3},
+    "lunge": {"quads": 1.0, "glutes": 0.9, "hams": 0.5, "inner": 0.3},
+    "jumpingjack": {"calves": 1.0, "shoulders": 0.5, "inner": 0.5, "glutes": 0.3},
 }
 LIVE_TIMEOUT = 8            # ไม่ได้ข่าวจากผู้เล่นเกินกี่วินาที ถือว่าเลิกเล่นแล้ว
 
@@ -150,6 +162,13 @@ def init_db():
         ucols = [r[1] for r in con.execute("PRAGMA table_info(users)")]
         if "avatar" not in ucols:
             con.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
+        for c, t in (("goal_reps", "INTEGER"), ("goal_kcal", "INTEGER"), ("goal_min", "INTEGER"), ("frame", "TEXT")):
+            if c not in ucols:                               # v12: เป้าหมายส่วนตัว + กรอบโปรไฟล์ที่ใส่อยู่
+                con.execute(f"ALTER TABLE users ADD COLUMN {c} {t}")
+        con.executescript("""
+            CREATE TABLE IF NOT EXISTS coins (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, player TEXT NOT NULL, amount INTEGER, reason TEXT);
+            CREATE TABLE IF NOT EXISTS owned (player TEXT NOT NULL, item TEXT NOT NULL, ts TEXT, PRIMARY KEY (player, item));
+        """)
         dcols = [r[1] for r in con.execute("PRAGMA table_info(duels)")]
         if "exercise" not in dcols:
             con.execute("ALTER TABLE duels ADD COLUMN exercise TEXT DEFAULT 'pushup'")
@@ -199,13 +218,23 @@ def rp_table(with_last=False):
     return (rp, last) if with_last else rp
 
 
-def compute_xp(s, good_today_before):
+GOAL_LIMITS = {"reps": (10, 300), "kcal": (5, 500), "min": (1, 60)}
+
+
+def user_goals(u):
+    """เป้าหมายรายวันของผู้เล่น (ตั้งเองได้ที่หน้าแรก) ถ้ายังไม่ตั้งใช้ค่าเริ่มต้น"""
+    u = u or {}
+    return {"reps": u.get("goal_reps") or DAILY_GOAL, "kcal": u.get("goal_kcal") or KCAL_GOAL, "min": u.get("goal_min") or MINUTES_GOAL}
+
+
+def compute_xp(s, good_today_before, goal=DAILY_GOAL):
     """คืนค่า (xp, รายการที่มาของคะแนน)"""
     good, attempts = s["good"], s["attempts"]
     detail = []
-    base = XP_PER_GOOD_REP * good
+    units = rep_units(s.get("exercise"), good)
+    base = XP_PER_GOOD_REP * units
     if base:
-        detail.append([f"ทำถูก {good} ครั้ง", base])
+        detail.append([f"ค้างท่าถูก {good} วินาที" if s.get("exercise") in SECONDS_PER_REP else f"ทำถูก {good} ครั้ง", base])
 
     reps = s.get("reps") or []
     if reps:
@@ -218,8 +247,8 @@ def compute_xp(s, good_today_before):
     if good >= 5 and attempts and good / attempts >= 0.9:
         detail.append(["ท่าเป๊ะทั้งเซต", XP_PERFECT_SET])
 
-    if good_today_before < DAILY_GOAL <= good_today_before + good:
-        detail.append([f"ถึงเป้าวันนี้ {DAILY_GOAL} ครั้ง", XP_DAILY_GOAL])
+    if good_today_before < goal <= good_today_before + units:
+        detail.append([f"ถึงเป้าวันนี้ {goal} ครั้ง", XP_DAILY_GOAL])
 
     for name, v in s.get("bonus") or []:          # เช่น ชนะดวล
         detail.append([name, v])
@@ -259,6 +288,22 @@ def badges_of(rows, streak):
         {"key": "streak7", "icon": "⚡", "name": "ฝึกติดกัน 7 วัน", "got": streak >= 7},
         {"key": "total1000", "icon": "👑", "name": "รวม 1,000 ครั้ง", "got": total_good >= 1000},
     ]
+
+
+# ===================== เหรียญ (เงินในเกม) =====================
+COIN_DUEL_WIN, COIN_DUEL_DRAW = 50, 15
+COIN_GAME_MAX = 40          # เกม: 1 เหรียญต่อท่าที่ถูก สูงสุด 40 ต่อรอบ
+COIN_DAILY_GOAL = 30
+
+
+def add_coins(con, player, amount, reason):
+    con.execute("INSERT INTO coins (ts, player, amount, reason) VALUES (?,?,?,?)",
+                (datetime.now().isoformat(timespec="seconds"), player, int(amount), reason))
+
+
+def coin_balance(player):
+    with db() as con:
+        return con.execute("SELECT COALESCE(SUM(amount),0) FROM coins WHERE player=?", (player,)).fetchone()[0]
 
 
 def all_rows():
@@ -312,6 +357,13 @@ def duel_record(player):
     return {"played": len(rows), "win": win, "draw": draw, "loss": len(rows) - win - draw, "recent": recent}
 
 
+def active_secs(r):
+    """เวลาที่ออกแรงจริงของเซต (วินาที) = TUT ทุกครั้ง + ช่วงเปลี่ยนท่า 1 วิ/ครั้ง ; เกม = ทั้งรอบ"""
+    if r["exercise"] == "game":
+        return GAME_SECONDS if r["attempts"] else 0
+    return (r["avg_tut"] or 0) * (r["attempts"] or 0) + (r["attempts"] or 0)
+
+
 def profile(rows, player):
     mine = [r for r in rows if r["player"] == player]
     total_xp = sum(r["xp"] for r in mine)
@@ -334,11 +386,11 @@ def profile(rows, player):
     everyone = set(all_xp) | set(rps)
     rank_position = 1 + sum(1 for p_ in everyone if rps.get(p_, 0) > my_rp)
     recent = []
-    for r in reversed(mine[-10:]):
+    for r in reversed(mine[-50:]):
         recent.append({
             "ts": r["ts"], "exercise": EXERCISE_NAMES.get(r["exercise"], r["exercise"]),
             "good": r["good"], "bad": r["bad"], "avg_tut": r["avg_tut"], "xp": r["xp"], "form_score": r.get("form"), "kcal": r.get("kcal"),
-            "detail": json.loads(r["xp_detail"] or "[]"),
+            "detail": json.loads(r["xp_detail"] or "[]"), "unit": "วินาที" if r["exercise"] in SECONDS_PER_REP else "ครั้ง",
         })
     week_ago = (date.today() - timedelta(days=6)).isoformat()
     two_weeks = (date.today() - timedelta(days=13)).isoformat()
@@ -348,7 +400,7 @@ def profile(rows, player):
     for r in mine:
         if r["day"] >= week_ago:
             for m, w in EXERCISE_MUSCLES.get(r["exercise"], {}).items():
-                muscles[m] = muscles.get(m, 0) + r["good"] * w
+                muscles[m] = muscles.get(m, 0) + rep_units(r["exercise"], r["good"]) * w
     return {
         "player": player,
         "form_score_7d": round(sum(fs_now) / len(fs_now)) if fs_now else None,
@@ -362,8 +414,12 @@ def profile(rows, player):
         "rank_position": rank_position,
         "players": len(everyone),
         "streak": streak,
-        "today_good": sum(r["good"] for r in mine if r["day"] == today),
-        "daily_goal": DAILY_GOAL,
+        "today_good": sum(rep_units(r["exercise"], r["good"]) for r in mine if r["day"] == today),
+        "daily_goal": user_goals(get_user(player))["reps"],
+        "today_kcal": round(sum((r.get("kcal") or 0) for r in mine if r["day"] == today), 1),
+        "today_min": round(sum(active_secs(r) for r in mine if r["day"] == today) / 60, 1),
+        "kcal_goal": user_goals(get_user(player))["kcal"], "minutes_goal": user_goals(get_user(player))["min"],
+        "coins": coin_balance(player), "frame": (get_user(player) or {}).get("frame"),
         "total_good": good,
         "form": round(100 * good / attempts) if attempts else 0,
         "avg_tut": round(sum(tuts) / len(tuts), 1) if tuts else 0,
@@ -401,7 +457,7 @@ def save_session(s):
     kcal = None
     if u and u["weight"]:
         active = sum(float(r.get("tut", 0) or 0) for r in s.get("reps") or []) or s["avg_tut"] * s["attempts"]
-        active += s["attempts"] * 1.0
+        active = s["good"] if s.get("exercise") in SECONDS_PER_REP else active + s["attempts"] * 1.0   # แพลงก์ = เวลาที่ค้างได้
         kcal = round(MET.get(s.get("exercise", "pushup"), 5.0) * u["weight"] * active / 3600, 1)
 
     now = datetime.now()
@@ -413,9 +469,12 @@ def save_session(s):
             if old:   # ส่งซ้ำ (เช่น ส่งค้างจากตอนเน็ตหลุด) ไม่นับซ้ำ
                 return {"ok": True, "duplicate": True, "xp": old["xp"],
                         "detail": json.loads(old["xp_detail"]), **_after(all_rows(), player)}
-        before = con.execute("SELECT COALESCE(SUM(good),0) FROM sessions WHERE player=? AND day=?",
+        before = con.execute("SELECT COALESCE(SUM(CASE WHEN exercise='plank' THEN good/3 ELSE good END),0) FROM sessions WHERE player=? AND day=?",
                              (player, day)).fetchone()[0]
-        xp, detail = compute_xp(s, before)
+        goal = user_goals(u)["reps"]
+        xp, detail = compute_xp(s, before, goal)
+        if before < goal <= before + rep_units(s.get("exercise"), s["good"]):              # ถึงเป้ารายวัน: ได้เหรียญด้วย
+            add_coins(con, player, COIN_DAILY_GOAL, "ถึงเป้ารายวัน")
         old_level = level_of(con.execute("SELECT COALESCE(SUM(xp),0) FROM sessions WHERE player=?",
                                          (player,)).fetchone()[0])["level"]
         con.execute(
@@ -490,8 +549,9 @@ def api_summary():
                         "level": level_of(total.get(p_, 0))["level"], "rp": rps.get(p_, 0) if p_ == player else None} for p_ in everyone],
         "ranks": {p_: {"name": rank_of(rps.get(p_, 0))["name"], "color": rank_of(rps.get(p_, 0))["color"]} for p_ in everyone},
         "avatars": {n: avatar_url(u) for n, u in users.items() if u.get("avatar")},
+        "frames": {n: u["frame"] for n, u in users.items() if u.get("frame")},
         "live": [dict(v, player=k) for k, v in live.items() if now - v["ts"] < LIVE_TIMEOUT],
-        "feed": [{"id": r["id"], "player": r["player"], "ts": r["ts"], "good": r["good"],
+        "feed": [{"id": r["id"], "player": r["player"], "ts": r["ts"], "good": r["good"], "unit": "วินาที" if r["exercise"] in SECONDS_PER_REP else "ครั้ง",
                   "exercise": EXERCISE_NAMES.get(r["exercise"], r["exercise"])} for r in reversed(rows[-15:])],
         "profile": profile(rows, player) if player else None,
         "rules": {"daily_goal": DAILY_GOAL, "xp_per_rep": XP_PER_GOOD_REP, "control_bonus": XP_CONTROL_BONUS,
@@ -521,7 +581,7 @@ def get_user(name):
 
 def all_users():
     with db() as con:
-        return [dict(r) for r in con.execute("SELECT name, avatar FROM users")]
+        return [dict(r) for r in con.execute("SELECT name, avatar, frame FROM users")]
 
 
 def avatar_url(u):
@@ -624,6 +684,108 @@ def me_api():
     return jsonify({"ok": True, "user": public_user(get_user(name))})
 
 
+@app.post("/api/me/goals")
+def me_goals():
+    """ตั้งเป้าหมายรายวัน 3 วง: ครั้ง / kcal / นาที"""
+    name = token_player()
+    if not name:
+        return jsonify(AUTH_ERROR[0]), AUTH_ERROR[1]
+    s = request.get_json(force=True, silent=True) or {}
+    vals = {}
+    for k, (lo, hi) in GOAL_LIMITS.items():
+        try:
+            vals[k] = max(lo, min(hi, int(s.get(k))))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "ค่าเป้าหมายไม่ถูกต้อง"}), 400
+    with db_lock, db() as con:
+        con.execute("UPDATE users SET goal_reps=?, goal_kcal=?, goal_min=? WHERE name=?", (vals["reps"], vals["kcal"], vals["min"], name))
+    return jsonify({"ok": True, "goals": vals})
+
+
+# ===================== ร้านค้า: กรอบโปรไฟล์ =====================
+# ราคาไล่ตามความหายาก ; รูปกรอบวาดในเว็บ (SVG) — ถ้าอยากใช้รูปเองวางที่ static/img/frame/<id>.png
+SHOP_FRAMES = [
+    {"id": "mint",    "name": "มิ้นต์สดชื่น",      "tier": "ธรรมดา",   "price": 300},
+    {"id": "sunrise", "name": "ซันไรส์",          "tier": "ธรรมดา",   "price": 450},
+    {"id": "neon",    "name": "นีออนไซเบอร์",      "tier": "หายาก",    "price": 800},
+    {"id": "ice",     "name": "ปีกน้ำแข็ง",        "tier": "หายาก",    "price": 1200},
+    {"id": "flame",   "name": "เปลวไฟนักสู้",      "tier": "มหากาพย์", "price": 1800},
+    {"id": "royal",   "name": "ราชันย์ทองคำ",      "tier": "มหากาพย์", "price": 2400},
+    {"id": "galaxy",  "name": "กาแล็กซี่",         "tier": "ตำนาน",    "price": 3000},
+    {"id": "champion","name": "แชมป์ไอรอน",       "tier": "ตำนาน",    "price": 3000},
+]
+TOPUP_CODE = "Sdx06"        # รหัสจำลองการจ่ายเงิน (ไม่มีการตัดเงินจริง)
+TOPUP_PACKS = [{"id": "p1", "coins": 300, "price": "฿29"}, {"id": "p2", "coins": 1000, "price": "฿89", "bonus": "+10%"},
+               {"id": "p3", "coins": 2500, "price": "฿199", "bonus": "+25%"}, {"id": "p4", "coins": 6000, "price": "฿449", "bonus": "คุ้มสุด"}]
+
+
+def _shop_view(name):
+    with db() as con:
+        owned = [r[0] for r in con.execute("SELECT item FROM owned WHERE player=?", (name,))]
+        log = [dict(r) for r in con.execute("SELECT ts, amount, reason FROM coins WHERE player=? ORDER BY id DESC LIMIT 8", (name,))]
+    return {"ok": True, "coins": coin_balance(name), "frames": SHOP_FRAMES, "packs": TOPUP_PACKS, "owned": owned,
+            "equipped": (get_user(name) or {}).get("frame"), "log": log,
+            "earn": {"duel_win": COIN_DUEL_WIN, "duel_draw": COIN_DUEL_DRAW, "game_max": COIN_GAME_MAX, "daily_goal": COIN_DAILY_GOAL}}
+
+
+@app.get("/api/shop")
+def shop_get():
+    name = token_player()
+    if not name:
+        return jsonify(AUTH_ERROR[0]), AUTH_ERROR[1]
+    return jsonify(_shop_view(name))
+
+
+@app.post("/api/shop/buy")
+def shop_buy():
+    name = token_player()
+    if not name:
+        return jsonify(AUTH_ERROR[0]), AUTH_ERROR[1]
+    item = next((f for f in SHOP_FRAMES if f["id"] == (request.get_json(force=True, silent=True) or {}).get("id")), None)
+    if item is None:
+        return jsonify({"ok": False, "error": "ไม่พบสินค้านี้"}), 404
+    with db_lock, db() as con:
+        if con.execute("SELECT 1 FROM owned WHERE player=? AND item=?", (name, item["id"])).fetchone():
+            return jsonify({"ok": False, "error": "มีกรอบนี้อยู่แล้ว"}), 409
+        bal = con.execute("SELECT COALESCE(SUM(amount),0) FROM coins WHERE player=?", (name,)).fetchone()[0]
+        if bal < item["price"]:
+            return jsonify({"ok": False, "error": f"เหรียญไม่พอ (ขาดอีก {item['price'] - bal:,})", "short": item["price"] - bal}), 400
+        add_coins(con, name, -item["price"], f"ซื้อกรอบ {item['name']}")
+        con.execute("INSERT INTO owned (player, item, ts) VALUES (?,?,?)", (name, item["id"], datetime.now().isoformat(timespec="seconds")))
+        con.execute("UPDATE users SET frame=? WHERE name=?", (item["id"], name))      # ซื้อแล้วใส่ให้เลย
+    return jsonify(_shop_view(name))
+
+
+@app.post("/api/shop/equip")
+def shop_equip():
+    name = token_player()
+    if not name:
+        return jsonify(AUTH_ERROR[0]), AUTH_ERROR[1]
+    fid = (request.get_json(force=True, silent=True) or {}).get("id") or None
+    with db_lock, db() as con:
+        if fid and not con.execute("SELECT 1 FROM owned WHERE player=? AND item=?", (name, fid)).fetchone():
+            return jsonify({"ok": False, "error": "ยังไม่มีกรอบนี้"}), 400
+        con.execute("UPDATE users SET frame=? WHERE name=?", (fid, name))
+    return jsonify(_shop_view(name))
+
+
+@app.post("/api/shop/topup")
+def shop_topup():
+    """เติมเหรียญแบบจำลอง: เลือกแพ็ก แล้วใส่รหัสยืนยัน (ไม่มีการจ่ายเงินจริง)"""
+    name = token_player()
+    if not name:
+        return jsonify(AUTH_ERROR[0]), AUTH_ERROR[1]
+    s = request.get_json(force=True, silent=True) or {}
+    pack = next((p for p in TOPUP_PACKS if p["id"] == s.get("pack")), None)
+    if pack is None:
+        return jsonify({"ok": False, "error": "เลือกแพ็กก่อน"}), 400
+    if str(s.get("code", "")).strip() != TOPUP_CODE:
+        return jsonify({"ok": False, "error": "รหัสเติมเงินไม่ถูกต้อง"}), 403
+    with db_lock, db() as con:
+        add_coins(con, name, pack["coins"], f"เติมเหรียญ {pack['coins']:,} ({pack['price']})")
+    return jsonify(_shop_view(name))
+
+
 @app.post("/api/me/avatar")
 def me_avatar():
     """รูปโปรไฟล์: เว็บครอปเป็นสี่เหลี่ยม 256x256 JPEG มาแล้ว เก็บไว้ที่ hub/static/uploads/avatars/"""
@@ -681,9 +843,14 @@ def _cleanup_streams():
 
 
 def _public(st):
-    return {"id": st["id"], "player": st["player"], "status": st["status"], "result": st["result"],
+    vis = None
+    if st["exercise"] in NEED_JOINTS and st["result"] is not None:     # ฝึกท่า: เห็นจุดสำคัญครบหรือยัง (ตัดสินที่ HUB)
+        miss = visible_missing((st["result"] or {}).get("kps"), st["exercise"])
+        vis = {"ok": not miss, "missing": miss}
+    return {"id": st["id"], "player": st["player"], "status": st["status"], "result": st["result"], "vis": vis,
+            "counting": st.get("count_from") is not None,
             "final": st["final"], "cira_online": time.time() - worker["last_poll"] < 3,
-            "frames_sent": st["seq"], "frames_done": st["done_seq"]}
+            "frames_sent": st["seq"], "frames_done": st["done_seq"], "game": _game_view(st)}
 
 
 @app.post("/api/stream/start")
@@ -696,6 +863,8 @@ def stream_start():
         sid, err = _create_stream(player, s.get("exercise", "pushup"))
         if err:
             return jsonify({"ok": False, "error": err}), 409
+        if s.get("wait"):                   # ฝึกท่า: ยังไม่นับจนกว่าเว็บจะเรียก /begin (หลังเห็นตัวครบ + นับ 3-2-1)
+            streams[sid]["wait_start"] = True
         room = rooms.get(str(s.get("duel") or ""))
         if room is not None and room["state"] != "done":          # ดวลจบแล้ว: ไม่ผูกกล้องใหม่กับห้อง (กันผลรอบที่แล้วหาย)
             p = _room_player(room, player)
@@ -782,6 +951,35 @@ def stream_get(sid):
         return (jsonify(_public(st)) if st else (jsonify({"ok": False, "error": "ไม่พบเซตนี้"}), 404))
 
 
+@app.post("/api/stream/<sid>/begin")
+def stream_begin(sid):
+    """เริ่มนับจริง: ครั้งที่ทำก่อนหน้านี้ (ช่วงรอ/นับถอยหลัง) ไม่นับ"""
+    with streams_lock:
+        st = streams.get(sid)
+        if st is None or st["player"] != token_player():
+            return jsonify({"ok": False, "error": "ไม่พบเซตนี้"}), 404
+        if st["exercise"] in NEED_JOINTS:
+            miss = visible_missing((st["result"] or {}).get("kps"), st["exercise"])
+            if miss and not (request.get_json(force=True, silent=True) or {}).get("force"):
+                return jsonify({"ok": False, "error": "ยังไม่เห็น " + " ".join(miss), "missing": miss}), 409
+        if st.get("count_from") is None:
+            st["count_from"] = len((st["result"] or {}).get("rep_log", []))
+        return jsonify({"ok": True, "base": st["count_from"]})
+
+
+def _trim_reps(s, start, end=None):
+    """เก็บเฉพาะครั้งที่ทำในช่วง [start, end) แล้วคิดสรุปของเซตใหม่ (ใช้ทั้งฝึกท่าและดวล)"""
+    reps = (s.get("reps") or [])[start:end]
+    good = [r for r in reps if r.get("valid")]
+    s.update(reps=reps, attempts=len(reps), good_reps=len(good), bad_reps=len(reps) - len(good),
+             avg_tut=round(sum(r.get("tut", 0) for r in good) / len(good), 2) if good else 0,
+             form_score=round(sum(r.get("score", 0) for r in reps) / len(reps)) if reps else 0,
+             shallow=sum("shallow" in r.get("issues", []) for r in reps),
+             body=sum("body" in r.get("issues", []) for r in reps),
+             fast=sum("fast" in r.get("issues", []) for r in reps))
+    s.pop("form", None)
+
+
 # ----- ฝั่ง CiRA -----
 @app.get("/api/work")
 def work_get():
@@ -822,6 +1020,10 @@ def work_result(sid):
         m = r.get("metrics") or {}
         if "pose" in m:                                  # เกม: เก็บประวัติท่า/เลนล่าสุดไว้ตัดสิน
             st["hist"].append((st["result_at"], m.get("lane"), m.get("pose")))
+        if st.get("game") is None and st["exercise"] == "game":
+            st["game"] = _new_game("pre")                 # ก่อนเริ่ม: เก็บตำแหน่งตัวไว้ใช้วางดาว
+        if st.get("game"):
+            _game_feed(st, r)
         st["done_seq"] = max(st["done_seq"], int(r.get("seq", 0)))
         live[st["player"]] = {"ts": time.time(), "reps": r.get("reps"), "bad": r.get("bad"),
                               "state": r.get("state"), "depth": r.get("depth"),
@@ -843,6 +1045,11 @@ def work_finish(sid):
         if st.get("duel"):
             with streams_lock:
                 _duel_session(st, s)
+        elif st.get("wait_start"):
+            if st.get("count_from") is None:
+                s["attempts"] = 0                            # ออกก่อนเริ่มนับ: ไม่บันทึก
+            else:
+                _trim_reps(s, st["count_from"])
     if int(s.get("attempts", 0) or 0) > 0 and s.get("player"):
         try:
             final = save_session(s)
@@ -863,7 +1070,7 @@ def work_finish(sid):
 # ห้องมีรหัส 4 หลัก คนสร้างกับเพื่อนเปิดกล้องในห้อง -> CiRA เห็นตัวทั้งคู่ + กดพร้อม -> นับถอยหลังพร้อมกัน -> แข่ง 60 วินาที
 # นับเฉพาะครั้งที่ทำถูก "ระหว่างเวลาแข่ง" (ครั้งที่ทำตอนวอร์มในห้องรอไม่นับ) เสมอให้ดูคะแนนท่าเฉลี่ย
 DUEL_SECONDS = 60
-DUEL_EXERCISES = ("pushup", "squat")
+DUEL_EXERCISES = ("pushup", "squat", "lunge", "jumpingjack", "plank")    # แพลงก์: แข่งค้างท่าถูกได้นานกว่า (วินาที)
 DUEL_COUNTDOWN = 4          # 3-2-1-เริ่ม
 XP_DUEL_WIN = 30
 XP_DUEL_DRAW = 15
@@ -877,7 +1084,7 @@ def _room_player(room, name):
 def _new_player(name):
     rows = [r for r in all_rows() if r["player"] == name]
     rp = rp_table().get(name, 0)
-    return {"name": name, "sid": None, "ready": False, "seen": time.time(),
+    return {"name": name, "sid": None, "ready": False, "seen": time.time(), "share": True,
             "rp": rp, "rank": rank_of(rp), "level": level_of(sum(r["xp"] for r in rows))["level"],
             "avatar": avatar_url(get_user(name)),
             "base": 0, "end": None, "score": 0, "form": 0, "attempts": 0, "final": None}
@@ -888,11 +1095,41 @@ def _stream_of(p):
     return st if st is not None and st["status"] == "active" else None
 
 
-def _cam_ok(p):
+# จุดที่ต้องเห็นก่อนเริ่มดวล แยกตามท่า (HUB ตัดสินจาก keypoints ที่ CiRA ส่งมา)
+#   วิดพื้น: ไหล่ ศอก ข้อมือ สะโพก (ข้างเดียวกัน) — ขาโดนตัดขอบได้ ; สควอท: ไหล่ สะโพก เข่า ข้อเท้า
+NEED_JOINTS = {"pushup": ("shoulder", "elbow", "wrist", "hip"), "squat": ("shoulder", "hip", "knee", "ankle"),
+               "lunge": ("shoulder", "hip", "knee", "ankle"), "plank": ("shoulder", "hip", "ankle"),   # แพลงก์ต้องเห็นถึงเท้า (กล้องใกล้ไป ขาหลุดเฟรม = เข่าที่ YOLO เดาผิด)
+               "jumpingjack": ("shoulder", "wrist", "hip", "ankle")}
+JOINT_TH = {"shoulder": "ไหล่", "elbow": "ศอก", "wrist": "ข้อมือ", "hip": "สะโพก", "knee": "เข่า", "ankle": "ข้อเท้า"}
+KP_CONF = 0.4
+
+
+def visible_missing(kps, exercise):
+    """คืนรายชื่อจุดที่ยังไม่เห็น ([] = เห็นครบ) ; kps เป็นพิกัด 0..1 จาก CiRA"""
+    if not kps:
+        return ["ตัวผู้เล่น"]
+    need = NEED_JOINTS.get(exercise, NEED_JOINTS["squat"])
+    def seen(n):
+        v = kps.get(n)
+        return bool(v) and v[2] >= KP_CONF and 0.01 < v[0] < 0.99 and 0.01 < v[1] < 0.99
+    best = None
+    for side in ("left", "right"):                       # เลือกข้างที่เห็นครบที่สุด
+        miss = [j for j in need if not seen(f"{side}_{j}")]
+        if best is None or len(miss) < len(best):
+            best = miss
+    return [JOINT_TH[j] for j in best]
+
+
+def _cam_missing(p, exercise):
     st = _stream_of(p)
     r = st["result"] if st else None
-    # ต้องเห็นเต็มตัว (หัวถึงเท้า) ถึงจะกดพร้อมได้ ; CiRA รุ่นเก่าที่ยังไม่ส่ง full ใช้แค่ว่ามีคน
-    return bool(r and r.get("kps") and r.get("full", True) and time.time() - st.get("result_at", 0) < 2.5)
+    if not r or time.time() - st.get("result_at", 0) >= 2.5:
+        return ["กล้อง"]
+    return visible_missing(r.get("kps"), exercise)
+
+
+def _cam_ok(p, exercise="squat"):
+    return not _cam_missing(p, exercise)
 
 
 def _rep_log(p):
@@ -916,10 +1153,13 @@ def _tick_rooms():
                 if now - alive > 45:                           # ไม่มีทั้งการเช็กห้องและภาพเกิน 45 วิ = ออกไปแล้ว
                     room["players"].remove(p)
             ps = room["players"]
-            if len(ps) == 2 and room["exercise"] and all(p["ready"] and _cam_ok(p) for p in ps):
+            # กดพร้อมได้ตลอด แต่จะเริ่มนับถอยหลังเมื่อทั้งคู่พร้อม "และ" กล้องเห็นจุดสำคัญครบ
+            if len(ps) == 2 and room["exercise"] and all(p["ready"] and _cam_ok(p, room["exercise"]) for p in ps):
                 room["state"] = "countdown"
                 room["start_at"] = now + DUEL_COUNTDOWN
                 room["end_at"] = room["start_at"] + room["seconds"]
+        elif st == "countdown" and now < room["start_at"] - 0.6 and not all(_cam_ok(p, room["exercise"]) for p in room["players"]):
+            room["state"] = "lobby"                           # มีคนหลุดกล้องระหว่างนับ -> กลับไปรอ (ยังพร้อมอยู่)
         elif st == "countdown" and now >= room["start_at"]:
             room["state"] = "live"
             for p in room["players"]:
@@ -951,6 +1191,14 @@ def _finish_room(room):
             con.execute("INSERT INTO duels (ts, day, p1, p2, s1, s2, f1, f2, winner, exercise) VALUES (?,?,?,?,?,?,?,?,?,?)",
                         (datetime.now().isoformat(timespec="seconds"), date.today().isoformat(),
                          a["name"], b["name"], a["score"], b["score"], a["form"], b["form"], room["winner"], room["exercise"]))
+        with db() as con:
+            for p in (a, b):
+                if room["winner"] == "":
+                    add_coins(con, p["name"], COIN_DUEL_DRAW, "เสมอในการดวล")
+                elif room["winner"] == p["name"]:
+                    add_coins(con, p["name"], COIN_DUEL_WIN, "ชนะดวล")
+        for p in (a, b):
+            p["coins"] = COIN_DUEL_WIN if room["winner"] == p["name"] else COIN_DUEL_DRAW if room["winner"] == "" else 0
         rps = rp_table()
         for p in (a, b):
             new = rps.get(p["name"], 0)
@@ -1002,7 +1250,8 @@ def _room_view(room, me):
         r = (st or {}).get("result") or {}
         out["players"].append({
             "name": p["name"], "me": p["name"] == me, "ready": p["ready"], "camera": p["sid"] is not None,
-            "cam_ok": _cam_ok(p), "score": p["score"], "form": p["form"], "attempts": p["attempts"],
+            "share": p.get("share", True), "cam_ok": _cam_ok(p, room["exercise"] or "squat"), "missing": _cam_missing(p, room["exercise"] or "squat"),
+            "coins": p.get("coins"), "score": p["score"], "form": p["form"], "attempts": p["attempts"],
             "base": p["base"], "final": p["final"], "rp_delta": p.get("rp_delta"), "level": p["level"], "avatar": p["avatar"],
             "rank": {"name": p["rank"]["name"], "color": p["rank"]["color"]}, "rp": p["rp"] if p["name"] == me else None,
             "kps": r.get("kps") if p["name"] != me and room["state"] in ("lobby", "countdown", "live") else None,
@@ -1092,6 +1341,38 @@ def duel_ready(code):
         return jsonify(_room_view(room, p["name"]))
 
 
+@app.post("/api/duel/<code>/share")
+def duel_share(code):
+    """เปิด/ปิด ให้คู่แข่งเห็นภาพกล้องจริงของเรา (กันโกง) — ปิดแล้วคู่แข่งเห็นแค่โครงกระดูก"""
+    s = request.get_json(force=True, silent=True) or {}
+    player = require_player() or ""
+    with streams_lock:
+        room = rooms.get(code)
+        p = _room_player(room, player)
+        if p is None:
+            return jsonify({"ok": False, "error": "ไม่ได้อยู่ในห้องนี้"}), 404
+        p["share"] = bool(s.get("share", True))
+        return jsonify(_room_view(room, p["name"]))
+
+
+@app.get("/api/duel/<code>/opp.jpg")
+def duel_opp_jpg(code):
+    """ภาพกล้องล่าสุดของคู่แข่ง (เฉพาะคนในห้อง และคู่แข่งเปิดแชร์อยู่)"""
+    tok = request.args.get("t", "")
+    with db() as con:
+        r = con.execute("SELECT name FROM tokens WHERE token=?", (tok,)).fetchone()
+    with streams_lock:
+        room = rooms.get(code)
+        if not r or _room_player(room, r["name"]) is None:
+            return ("", 404)
+        opp = next((q for q in room["players"] if q["name"] != r["name"]), None)
+        st = streams.get(opp["sid"]) if opp and opp.get("sid") else None
+        if opp is None or not opp.get("share", True) or st is None or not st["frame"]:
+            return ("", 404)
+        data = st["frame"]
+    return Response(data, mimetype="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
 @app.post("/api/duel/<code>/leave")
 def duel_leave(code):
     s = request.get_json(force=True, silent=True) or {}
@@ -1165,8 +1446,186 @@ def _game_stream(sid):
     if st is None or (player and player != st["player"]) or not player:
         return None
     if st["game"] is None:
-        st["game"] = {"score": 0, "hits": 0, "miss": 0, "combo": 0, "best": 0, "judged": set(), "saved": None}
+        st["game"] = _new_game("lanes")
     return st
+
+
+# ===================== เกมใหม่ (v12): หลบกำแพง / ชูมือจับดาว =====================
+# ทั้งสองเกม HUB เป็นคนคิดทุกอย่างจาก keypoints ที่ CiRA ส่งมา: ความสูงตัว, ตำแหน่งดาว, โดน/พลาด, คะแนน
+# เว็บแค่วาดภาพตามที่ HUB บอก (ส่งมากับผลของสตรีม ใน key "game")
+GAME_TH = {"lanes": "เลนท่าทาง", "wall": "หลบกำแพง", "stars": "ชูมือจับดาว"}
+WALL_GAPS = {"high": (0.58, 1.0), "mid": (0.28, 0.74), "low": (0.0, 0.42)}   # ช่วงความสูงตัว h ที่ลอดช่องได้
+WALL_LAG = 0.5              # รอผลจาก CiRA ที่มาช้าอีกนิด แล้วค่อยตัดสินกำแพงแต่ละอัน
+WALL_WINDOW = (0.7, 0.35)   # ดูความสูงตัวตั้งแต่ 0.7 วิก่อนกำแพงถึงตัว ถึง 0.35 วิหลังถึง
+WALL_LIVES = 3
+STAR_TTL = (3.6, 2.4)       # อายุดาว ช่วงต้นเกม -> ท้ายเกม (วินาที)
+STAR_MAX = 3
+
+
+def _new_game(kind):
+    return {"kind": kind, "score": 0, "hits": 0, "miss": 0, "combo": 0, "best": 0, "judged": set(), "saved": None,
+            "t0": None, "over": False, "lives": WALL_LIVES, "h": None, "hh": deque(maxlen=240), "rstand": 0.8,
+            "walls": [], "stars": [], "nstar": 0, "last_spawn": 0, "body": None, "events": deque(maxlen=16)}
+
+
+def _game_score(g, ok, base=100):
+    if ok:
+        g["combo"] += 1
+        g["hits"] += 1
+        g["best"] = max(g["best"], g["combo"])
+        g["score"] += base + 10 * min(g["combo"] - 1, 10)
+    else:
+        g["combo"] = 0
+        g["miss"] += 1
+
+
+def body_height(kps, g):
+    """ความสูงตัว 0..1 (1 = ยืนตรง, 0 = ย่อลึก) = ระยะสะโพก→เข่า (แนวตั้ง) เทียบความยาวลำตัว
+    ใช้ได้ทั้งกล้องด้านหน้าและด้านข้าง ; ปรับเทียบกับท่ายืนของคนนั้นเองระหว่างเล่น"""
+    rs = []
+    for side in ("left", "right"):
+        sh, hp, kn = (kps.get(f"{side}_{j}") for j in ("shoulder", "hip", "knee"))
+        if sh and hp and kn and min(sh[2], hp[2], kn[2]) >= KP_CONF and hp[1] - sh[1] > 0.03:
+            rs.append((kn[1] - hp[1]) / (hp[1] - sh[1]))
+    if not rs:
+        return None
+    r = sum(rs) / len(rs)
+    g["rstand"] = max(g["rstand"] * 0.9995, min(r, 1.6))
+    return max(0.0, min(1.0, (r / g["rstand"] - 0.2) / 0.65))
+
+
+def _wall_plan():
+    out, t, last, n = [], 3.0, None, 0
+    while t < GAME_SECONDS - 1.5:
+        gap = random.choice([x for x in ("high", "mid", "low") if x != last] if random.random() < 0.7 else ["high", "mid", "low"])
+        out.append({"id": f"w{n}", "t": round(t, 2), "gap": gap, "res": None})
+        last, n = gap, n + 1
+        t += max(1.9, 2.9 - t * 0.018)
+    return out
+
+
+def _spawn_star(g, now, aspect):
+    b = g["body"]
+    if not b:
+        return
+    cx, cy, T = b
+    el = now - g["t0"]
+    for _ in range(12):                                   # หาจุดที่ไม่ทับดาวดวงอื่น
+        a = math.radians(random.uniform(-200, 20))         # รอบตัวช่วงบน (เหนือไหล่ + ด้านข้าง)
+        R = T * random.uniform(0.85, 1.5)
+        x = min(0.92, max(0.08, cx + math.cos(a) * R / aspect))
+        y = min(cy + 0.35 * T, max(0.07, cy + math.sin(a) * R))
+        r = max(0.045, 0.27 * T)
+        if all(math.hypot((x - o["x"]) * aspect, y - o["y"]) > 2.2 * r for o in g["stars"] if o["res"] is None):
+            break
+    ttl = STAR_TTL[0] + (STAR_TTL[1] - STAR_TTL[0]) * min(1, el / GAME_SECONDS)
+    gold = random.random() < 0.12
+    g["stars"].append({"id": f"s{g['nstar']}", "x": round(x, 4), "y": round(y, 4), "r": round(r, 4),
+                       "born": now, "die": now + ttl, "ttl": round(ttl, 2), "gold": gold, "res": None})
+    g["nstar"] += 1
+    g["last_spawn"] = now
+
+
+def _game_feed(st, r):
+    """ผลใหม่จาก CiRA: อัปเดตความสูงตัว / ตำแหน่งลำตัว / เช็กมือโดนดาว"""
+    g = st.get("game")
+    if not g or g["kind"] not in ("wall", "stars", "pre"):
+        return
+    kps, now = r.get("kps") or {}, st["result_at"]
+    if g["kind"] in ("wall", "pre"):
+        h = body_height(kps, g)
+        if h is not None:
+            g["h"] = round(h, 3)
+            if g["kind"] == "wall":
+                g["hh"].append((now, h))
+    if g["kind"] in ("stars", "pre"):
+        aspect = (r.get("w") or 16) / (r.get("h") or 9)
+        sh = [kps[n] for n in ("left_shoulder", "right_shoulder") if kps.get(n) and kps[n][2] >= KP_CONF]
+        hp = [kps[n] for n in ("left_hip", "right_hip") if kps.get(n) and kps[n][2] >= KP_CONF]
+        if sh:
+            cx, cy = sum(p[0] for p in sh) / len(sh), sum(p[1] for p in sh) / len(sh)
+            T = (sum(p[1] for p in hp) / len(hp) - cy) if hp else (g["body"][2] if g["body"] else 0.25)
+            g["body"] = (cx, cy, max(0.12, min(0.45, T)))
+        g["aspect"] = aspect
+        if g["t0"] and not g["over"]:
+            hands = [kps[n] for n in ("left_wrist", "right_wrist") if kps.get(n) and kps[n][2] >= KP_CONF]
+            for sr in g["stars"]:
+                if sr["res"] is None and any(math.hypot((w[0] - sr["x"]) * aspect, w[1] - sr["y"]) <= sr["r"] * 1.15 for w in hands):
+                    sr["res"] = "hit"
+                    _game_score(g, True, 250 if sr["gold"] else 100)
+                    g["events"].append({"id": sr["id"], "hit": True, "gold": sr["gold"]})
+    _game_tick(st, now)
+
+
+def _game_tick(st, now=None):
+    g = st.get("game")
+    if not g or g["kind"] not in ("wall", "stars") or not g["t0"] or g["over"]:
+        return
+    now = now or time.time()
+    el = now - g["t0"]
+    if g["kind"] == "wall":
+        for w in g["walls"]:
+            t = g["t0"] + w["t"]
+            if w["res"] is None and now >= t + WALL_LAG:
+                hs = [h for ts, h in g["hh"] if t - WALL_WINDOW[0] <= ts <= t + WALL_WINDOW[1]]
+                lo, hi = WALL_GAPS[w["gap"]]
+                ok = bool(hs) and sum(lo <= h <= hi for h in hs) / len(hs) >= 0.4
+                w["res"] = "pass" if ok else "crash"
+                _game_score(g, ok)
+                g["events"].append({"id": w["id"], "hit": ok})
+                if not ok:
+                    g["lives"] -= 1
+                    if g["lives"] <= 0:
+                        g["over"] = True
+                        return
+    else:
+        for sr in g["stars"]:
+            if sr["res"] is None and now > sr["die"]:
+                sr["res"] = "miss"
+                _game_score(g, False)
+                g["events"].append({"id": sr["id"], "hit": False})
+        g["stars"] = [sr for sr in g["stars"] if sr["res"] is None or now - sr["die"] < 3]
+        alive = sum(1 for sr in g["stars"] if sr["res"] is None)
+        if (el < GAME_SECONDS - 2 and alive < min(STAR_MAX, 1 + int(el // 18))
+                and now - g["last_spawn"] >= max(0.6, 1.3 - el * 0.01)):
+            _spawn_star(g, now, g.get("aspect", 16 / 9))
+    if el >= GAME_SECONDS + 1.0:
+        g["over"] = True
+
+
+def _game_view(st):
+    g = st.get("game")
+    if not g or g["kind"] not in ("wall", "stars") or not g["t0"]:
+        return None
+    now = time.time()
+    _game_tick(st, now)
+    return {"kind": g["kind"], "el": round(now - g["t0"], 3), "score": g["score"], "hits": g["hits"], "miss": g["miss"],
+            "combo": g["combo"], "lives": g["lives"], "over": g["over"], "h": g["h"], "events": list(g["events"]),
+            "stars": [{**{k: sr[k] for k in ("id", "x", "y", "r", "gold", "ttl")}, "left": round(sr["die"] - now, 2)}
+                      for sr in g["stars"] if sr["res"] is None]}
+
+
+@app.post("/api/game/<sid>/begin")
+def game_begin(sid):
+    """เริ่มเกม (หลังนับ 3-2-1) : HUB จัดตารางกำแพง/เริ่มนับเวลา"""
+    kind = (request.get_json(force=True, silent=True) or {}).get("kind", "lanes")
+    if kind not in GAME_TH:
+        return jsonify({"ok": False, "error": "ไม่รู้จักเกมนี้"}), 400
+    with streams_lock:
+        st = streams.get(sid)
+        player = token_player()
+        if st is None or not player or player != st["player"]:
+            return jsonify({"ok": False, "error": "ไม่พบเกมนี้"}), 404
+        g = _new_game(kind)
+        old = st.get("game")
+        if old:                                           # ใช้ค่าที่เก็บไว้ช่วงรอ (ตำแหน่งตัว / ท่ายืนปกติ)
+            g["body"], g["rstand"], g["aspect"] = old.get("body"), old.get("rstand", 0.8), old.get("aspect", 16 / 9)
+        g["t0"] = time.time() if kind != "lanes" else None
+        if kind == "wall":
+            g["walls"] = _wall_plan()
+        st["game"] = g
+        return jsonify({"ok": True, "kind": kind, "seconds": GAME_SECONDS, "lives": WALL_LIVES,
+                        "walls": [{k: w[k] for k in ("id", "t", "gap")} for w in g["walls"]], "gaps": WALL_GAPS})
 
 
 @app.post("/api/game/<sid>/judge")
@@ -1211,8 +1670,9 @@ def game_best():
     if not player:
         return jsonify(AUTH_ERROR[0]), AUTH_ERROR[1]
     with db() as con:
-        r = con.execute("SELECT score, hits, miss, best_combo, ts FROM games WHERE player=? ORDER BY score DESC LIMIT 1", (player,)).fetchone()
-        n = con.execute("SELECT COUNT(*) FROM games WHERE player=?", (player,)).fetchone()[0]
+        kind = request.args.get("g", "lanes")
+        r = con.execute("SELECT score, hits, miss, best_combo, ts FROM games WHERE player=? AND COALESCE(game,'lanes')=? ORDER BY score DESC LIMIT 1", (player, kind)).fetchone()
+        n = con.execute("SELECT COUNT(*) FROM games WHERE player=? AND COALESCE(game,'lanes')=?", (player, kind)).fetchone()[0]
     return jsonify({"ok": True, "best": dict(r) if r else None, "plays": n})
 
 
@@ -1228,29 +1688,36 @@ def game_finish(sid):
         if st["status"] == "active":                     # ปิดกล้องฝั่ง CiRA ด้วย
             st["status"], st["stop_at"] = "stopping", time.time()
         player = st["player"]
+    kind = g["kind"] if g["kind"] in GAME_TH else "lanes"
     total = g["hits"] + g["miss"]
     acc = g["hits"] / total if total else 0
     xp = g["hits"] * 5 + (20 if total >= 10 and acc >= 0.8 else 0)
+    coins = min(COIN_GAME_MAX, g["hits"])
     rp = min(RP_GAME_MAX, g["hits"] // 2 + (5 if total >= 10 and acc >= 0.8 else 0))
-    detail = [[f"ทำท่าถูก {g['hits']} ครั้ง", g["hits"] * 5]] + ([["แม่นยำ 80% ขึ้นไป", 20]] if xp > g["hits"] * 5 else [])
+    what = {"lanes": "ทำท่าถูก", "wall": "ลอดกำแพง", "stars": "จับดาว"}[kind]
+    detail = [[f"{GAME_TH[kind]}: {what} {g['hits']} ครั้ง", g["hits"] * 5]] + ([["แม่นยำ 80% ขึ้นไป", 20]] if xp > g["hits"] * 5 else [])
     now = datetime.now()
     rp_before = rp_table().get(player, 0)
     rows = [r for r in all_rows() if r["player"] == player]
     old_level = level_of(sum(r["xp"] for r in rows))["level"]
     with db_lock, db() as con:
         con.execute("INSERT INTO games (ts, day, player, game, score, hits, miss, best_combo, xp, rp) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                    (now.isoformat(timespec="seconds"), now.date().isoformat(), player, "lanes", g["score"], g["hits"],
+                    (now.isoformat(timespec="seconds"), now.date().isoformat(), player, kind, g["score"], g["hits"],
                      g["miss"], g["best"], xp, rp))
+        if coins:
+            add_coins(con, player, coins, f"เกม{GAME_TH[kind]}")
         if total:   # นับ EXP เข้าเลเวลด้วย (บันทึกเป็นเซตชนิด "game")
-            con.execute("INSERT INTO sessions (player, exercise, day, ts, good, attempts, bad, avg_tut, xp, xp_detail, form)"
-                        " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            u = get_user(player)
+            kcal = round(MET["game"] * u["weight"] * GAME_SECONDS / 3600, 1) if u and u["weight"] else None
+            con.execute("INSERT INTO sessions (player, exercise, day, ts, good, attempts, bad, avg_tut, xp, xp_detail, form, kcal)"
+                        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                         (player, "game", now.date().isoformat(), now.isoformat(timespec="seconds"), g["hits"], total,
-                         g["miss"], 0, xp, json.dumps(detail, ensure_ascii=False), 0))   # form 0 = ไม่นับในคะแนนท่าเฉลี่ย
+                         g["miss"], 0, xp, json.dumps(detail, ensure_ascii=False), 0, kcal))   # form 0 = ไม่นับในคะแนนท่าเฉลี่ย
     with db() as con:
-        best = con.execute("SELECT MAX(score) FROM games WHERE player=? AND game='lanes'", (player,)).fetchone()[0]
+        best = con.execute("SELECT MAX(score) FROM games WHERE player=? AND game=?", (player, kind)).fetchone()[0]
     after = _after(all_rows(), player)
     out = {"ok": True, "score": g["score"], "hits": g["hits"], "miss": g["miss"], "best_combo": g["best"],
-           "accuracy": round(100 * acc), "xp": xp, "detail": detail, "rp_gain": after["rp"] - rp_before,
+           "accuracy": round(100 * acc), "xp": xp, "detail": detail, "coins": coins, "kind": kind, "lives": g["lives"], "rp_gain": after["rp"] - rp_before,
            "best_score": best, "new_record": best == g["score"] and g["score"] > 0,
            "level_up": after["level"]["level"] > old_level, **after}
     g["saved"] = out

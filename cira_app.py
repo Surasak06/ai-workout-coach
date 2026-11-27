@@ -15,11 +15,15 @@ import numpy as np
 import config
 from pose_source import COCO_NAMES, SKELETON, YoloPose
 from pushup import PushUpAnalyzer
-import importlib as _il, squat as _squat, game as _game
+import importlib as _il, squat as _squat, game as _game, plank as _plank, lunge as _lunge, jumpingjack as _jj
 _il.reload(_squat)                      # โหนด CiRA reload แค่ไฟล์เดิม ๆ -> reload ไฟล์ท่าใหม่ตรงนี้แทน
 _il.reload(_game)
-ANALYZERS = {"pushup": PushUpAnalyzer, "squat": _squat.SquatAnalyzer, "game": _game.GameAnalyzer}
-CODE_VERSION = 7                        # เว็บใช้เช็กว่า CiRA โหลดโค้ดใหม่แล้ว (ถ้ายังเก่าจะขึ้นเตือนให้ Stop→Run)
+_il.reload(_plank)
+_il.reload(_lunge)
+_il.reload(_jj)
+ANALYZERS = {"pushup": PushUpAnalyzer, "squat": _squat.SquatAnalyzer, "game": _game.GameAnalyzer,
+             "plank": _plank.PlankAnalyzer, "lunge": _lunge.LungeAnalyzer, "jumpingjack": _jj.JumpingJackAnalyzer}
+CODE_VERSION = 8                        # เว็บใช้เช็กว่า CiRA โหลดโค้ดใหม่แล้ว (ถ้ายังเก่าจะขึ้นเตือนให้ Stop→Run)
 from stats_logger import StatsLogger
 from tracker import PanTiltTracker
 from voice import Voice
@@ -439,7 +443,9 @@ class CoachApp:
             (f"REPS {an.good_reps}   bad {an.attempts - an.good_reps}", (0, 255, 120), 1.4),
             (f"GAME pose {an.pose}  lane {an.lane}" if getattr(an, "exercise", "") == "game" else
              f"depth {depth}  elbow {elbow}  body {body}  {an.state}" if getattr(an, "exercise", "pushup") == "pushup" else
-             f"SQUAT depth {depth}  knee {an.knee or 0:.0f}  lean {an.lean or 0:.0f}  {an.state}", (255, 255, 255), 0.8),
+             f"SQUAT depth {depth}  knee {an.knee or 0:.0f}  lean {an.lean or 0:.0f}  {an.state}" if getattr(an, "exercise", "") == "squat" else
+             f"{an.exercise.upper()} {an.state}  " + "  ".join(f"{k} {v}" for k, v in an.metrics().items() if isinstance(v, (int, float)) and not isinstance(v, bool)),
+             (255, 255, 255), 0.8),
         ]
         if an.reps:
             r = an.reps[-1]
